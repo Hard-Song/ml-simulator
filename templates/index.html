@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Simulator - 多模型对比</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        /* 模型卡片样式 */
+        .model-card {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            transition: all 0.3s;
+        }
+
+        .model-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .model-card.selected {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+
+        .model-card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .model-card-body {
+            padding: 1rem;
+        }
+
+        .model-select-checkbox {
+            width: 1.2rem;
+            height: 1.2rem;
+        }
+
+        .param-slider {
+            margin-bottom: 0.8rem;
+        }
+
+        .param-slider label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .param-value {
+            color: #0d6efd;
+            font-weight: bold;
+        }
+
+        .collapse-button {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-title {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-cpu"></i> ML Simulator
+            </a>
+            <span class="navbar-text text-white">
+                模型性能模拟与对比工具
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <!-- 第一行：任务配置 + 模型参数 -->
+        <div class="row">
+            <!-- 左侧：任务配置 -->
+            <div class="col-lg-3 col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">⚙️ 任务配置</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- 任务类型 -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">任务类型</label>
+                            <select class="form-select" id="taskType">
+                                <option value="binary">二分类</option>
+                                <option value="multiclass">多分类</option>
+                                <option value="regression">回归</option>
+                            </select>
+                        </div>
+
+                        <!-- 样本量 -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">样本量</label>
+                            <input type="range" class="form-range" id="numSamples" min="1000" max="20000" step="1000" value="5000">
+                            <div class="text-center">
+                                <span class="badge bg-primary" id="numSamplesValue">5000</span>
+                            </div>
+                        </div>
+
+                        <!-- 类别数（多分类） -->
+                        <div class="mb-3" id="nClassesGroup">
+                            <label class="form-label fw-bold">类别数</label>
+                            <input type="number" class="form-control" id="nClasses" min="2" max="10" value="2">
+                        </div>
+
+                        <!-- 类别分布 -->
+                        <div class="mb-3" id="labelDistGroup">
+                            <label class="form-label fw-bold">类别分布</label>
+                            <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
+                            <small class="form-text text-muted">留空=均衡</small>
+                        </div>
+
+                        <hr>
+
+                        <!-- 难度参数 -->
+                        <div class="section-title">📊 学习难度</div>
+
+                        <div class="mb-2">
+                            <label class="form-label">类间可分性</label>
+                            <input type="range" class="form-range" id="separability" min="0" max="1" step="0.05" value="0.7">
+                            <div class="d-flex justify-content-between">
+                                <small>难</small>
+                                <span class="param-value" id="separabilityValue">0.7</span>
+                                <small>易</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">标签噪声</label>
+                            <input type="range" class="form-range" id="labelNoise" min="0" max="0.5" step="0.01" value="0.05">
+                            <div class="text-center">
+                                <span class="param-value" id="labelNoiseValue">0.05</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">特征噪声</label>
+                            <input type="range" class="form-range" id="featureNoise" min="0" max="0.5" step="0.01" value="0.1">
+                            <div class="text-center">
+                                <span class="param-value" id="featureNoiseValue">0.1</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">非线性强度</label>
+                            <input type="range" class="form-range" id="nonlinearity" min="0" max="1" step="0.05" value="0.3">
+                            <div class="text-center">
+                                <span class="param-value" id="nonlinearityValue">0.3</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：模型参数配置 -->
+            <div class="col-lg-9 col-md-8 mb-3">
+                <div class="card">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🤖 模型能力配置</h5>
+                        <div>
+                            <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#addModelModal">
+                                ➕ 添加自定义模型
+                            </button>
+                            <button class="btn btn-sm btn-light ms-2" id="expandAllBtn">展开全部</button>
+                            <button class="btn btn-sm btn-light" id="collapseAllBtn">收起全部</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <small class="text-muted">
+                                    💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- 模型卡片容器 -->
+                        <div id="modelCardsContainer" class="row">
+                            <!-- 动态生成模型卡片 -->
+                        </div>
+
+                        <!-- 全局控制按钮 -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3 pt-3 border-top">
+                            <button class="btn btn-outline-secondary" id="resetAllBtn">
+                                🔄 重置所有参数
+                            </button>
+                            <button class="btn btn-success" id="runBtn">
+                                <span id="runBtnText">▶ 运行模拟</span>
+                                <span id="runBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                            </button>
+                            <button class="btn btn-primary" id="exportBtn">
+                                📥 导出 CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第二行：对比结果 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">📈 对比结果</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- 结果表格 -->
+                        <div class="mb-4">
+                            <div class="table-responsive">
+                                <table class="table table-hover table-bordered" id="resultsTable">
+                                    <thead class="table-dark" id="resultsTableHead">
+                                        <tr>
+                                            <th>模型</th>
+                                            <th>准确率</th>
+                                            <th>AUC</th>
+                                            <th>F1</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">
+                                                <i class="bi bi-arrow-up"></i><br>
+                                                点击"运行模拟"查看结果
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 图表区域 -->
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0" id="chart1Title">准确率对比</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="chart1"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0" id="chart2Title">F1对比</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="chart2"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">综合性能雷达图</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="radarChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提示信息 -->
+        <div id="alertBox"></div>
+    </div>
+
+    <!-- 添加自定义模型模态框 -->
+    <div class="modal fade" id="addModelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">➕ 添加自定义模型</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addModelForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">模型名称</label>
+                            <input type="text" class="form-control" id="newModelName"
+                                   placeholder="例如: my_model_v1"
+                                   pattern="[a-zA-Z0-9_]+"
+                                   required
+                                   maxlength="20">
+                            <small class="form-text text-muted">只能包含字母、数字、下划线，最多20个字符</small>
+                        </div>
+
+                        <hr>
+                        <h6 class="mb-3">能力参数</h6>
+
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label">Bias (偏差)</label>
+                                <input type="range" class="form-range" id="newModelBias"
+                                       min="0" max="1" step="0.05" value="0.5">
+                                <div class="text-end">
+                                    <span class="badge bg-primary" id="newModelBiasValue">0.5</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Variance (方差)</label>
+                                <input type="range" class="form-range" id="newModelVariance"
+                                       min="0" max="1" step="0.05" value="0.3">
+                                <div class="text-end">
+                                    <span class="badge bg-primary" id="newModelVarianceValue">0.3</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Capacity (能力)</label>
+                                <input type="range" class="form-range" id="newModelCapacity"
+                                       min="0" max="1" step="0.05" value="0.7">
+                                <div class="text-end">
+                                    <span class="badge bg-primary" id="newModelCapacityValue">0.7</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Noise Tol (容错)</label>
+                                <input type="range" class="form-range" id="newModelNoiseTol"
+                                       min="0" max="1" step="0.05" value="0.5">
+                                <div class="text-end">
+                                    <span class="badge bg-primary" id="newModelNoiseTolValue">0.5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmAddModelBtn">
+                        ✅ 添加模型
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+</body>
+</html>

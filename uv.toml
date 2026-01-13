@@ -1,0 +1,8 @@
+# UV 配置文件
+# 使用国内镜像加速
+
+[pip]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+extra-index-url = [
+    "https://mirrors.aliyun.com/pypi/simple/",
+]

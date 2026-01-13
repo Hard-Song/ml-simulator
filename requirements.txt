@@ -1,0 +1,12 @@
+# ML Simulator Web Requirements
+
+# Web Framework
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Data Science
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Chart.js (CDN, no installation needed)
+# Bootstrap (CDN, no installation needed)
