@@ -814,6 +814,23 @@ async function runSimulation() {
             body: JSON.stringify(requestData)
         });
 
+        // 检查 HTTP 状态码
+        if (!response.ok) {
+            // 尝试解析错误信息
+            let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+            try {
+                const data = await response.json();
+                if (data.error) {
+                    errorMsg = data.error;
+                }
+            } catch (e) {
+                // 如果不是 JSON，使用默认错误信息
+                console.error('Failed to parse error response:', e);
+            }
+            showAlert('模拟失败: ' + errorMsg, 'danger');
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -825,6 +842,8 @@ async function runSimulation() {
             showAlert('模拟失败: ' + data.error, 'danger');
         }
     } catch (error) {
+        console.error('Simulation error:', error);
+        console.error('Error stack:', error.stack);
         showAlert('请求失败: ' + error.message, 'danger');
     } finally {
         // 恢复按钮状态
@@ -1287,7 +1306,15 @@ async function exportCSV() {
 
 // 显示提示（新的Toast通知系统）
 function showAlert(message, type = 'info') {
+    console.log('showAlert called:', message, type);
+
     const container = document.getElementById('toast-container');
+
+    if (!container) {
+        console.error('Toast container not found!');
+        alert(`${type}: ${message}`); // 降级方案：使用浏览器原生 alert
+        return;
+    }
 
     // 创建toast元素
     const toast = document.createElement('div');
@@ -1313,6 +1340,8 @@ function showAlert(message, type = 'info') {
 
     // 添加到容器
     container.appendChild(toast);
+
+    console.log('Toast added to container:', toast);
 
     // 10秒后自动关闭
     setTimeout(() => {

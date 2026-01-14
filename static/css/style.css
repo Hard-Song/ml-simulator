@@ -337,6 +337,10 @@ hr {
     border-left: 4px solid #ef4444;
 }
 
+.toast.toast-danger {
+    border-left: 4px solid #ef4444;
+}
+
 .toast.toast-warning {
     border-left: 4px solid #f59e0b;
 }
