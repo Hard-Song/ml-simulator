@@ -355,7 +355,12 @@ def _binary_pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     recall_curve = tp_cumsum / (y_true_sorted.sum() + 1e-12)
 
     # 计算AUC（使用梯形法则）
-    pr_auc = np.trapz(precision_curve, recall_curve)
+    # 自动兼容处理
+    if hasattr(np, 'trapezoid'):
+        trapz = np.trapezoid
+    else:
+        trapz = np.trapz
+    pr_auc = trapz(precision_curve, recall_curve)
 
     return float(np.clip(pr_auc, 0, 1))
 
