@@ -97,53 +97,151 @@
     </nav>
 
     <div class="container-fluid mt-3">
-        <!-- 第一行：任务配置 + 模型参数 -->
-        <div class="row">
-            <!-- 左侧：任务配置 -->
-            <div class="col-lg-3 col-md-4 mb-3">
-                <div class="card">
+        <!-- 第一行：实验设计 + 数据集特性 -->
+        <div class="row mb-3">
+            <!-- 左列：实验设计（合并实验方案 + 任务配置） -->
+            <div class="col-lg-7 col-md-7 mb-3">
+                <div class="card h-100">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">⚙️ 任务配置</h5>
+                        <h5 class="mb-0">⚙️ 实验设计</h5>
                     </div>
                     <div class="card-body">
-                        <!-- 任务类型 -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">任务类型</label>
-                            <select class="form-select" id="taskType">
-                                <option value="binary">二分类</option>
-                                <option value="multiclass">多分类</option>
-                                <option value="regression">回归</option>
-                            </select>
-                        </div>
-
-                        <!-- 样本量 -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">样本量</label>
-                            <input type="range" class="form-range" id="numSamples" min="1000" max="20000" step="1000" value="5000">
-                            <div class="text-center">
-                                <span class="badge bg-primary" id="numSamplesValue">5000</span>
+                        <!-- 任务基本配置 -->
+                        <h6 class="mb-2 text-primary">基本配置</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label fw-bold">任务类型</label>
+                                <select class="form-select" id="taskType">
+                                    <option value="binary">二分类</option>
+                                    <option value="multiclass">多分类</option>
+                                    <option value="regression">回归</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label fw-bold">样本量</label>
+                                <input type="range" class="form-range" id="numSamples" min="1000" max="20000" step="1000" value="5000">
+                                <div class="text-center">
+                                    <span class="badge bg-primary" id="numSamplesValue">5000</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- 类别数（多分类） -->
-                        <div class="mb-3" id="nClassesGroup">
-                            <label class="form-label fw-bold">类别数</label>
-                            <input type="number" class="form-control" id="nClasses" min="2" max="10" value="2">
-                        </div>
-
-                        <!-- 类别分布 -->
-                        <div class="mb-3" id="labelDistGroup">
-                            <label class="form-label fw-bold">类别分布</label>
-                            <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
-                            <small class="form-text text-muted">留空=均衡</small>
+                        <div class="row mb-3">
+                            <div class="col-md-6 mb-2" id="nClassesGroup">
+                                <label class="form-label fw-bold">类别数</label>
+                                <input type="number" class="form-control" id="nClasses" min="2" max="10" value="2">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label fw-bold">类别分布</label>
+                                <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
+                                <small class="form-text text-muted">留空=均衡</small>
+                            </div>
                         </div>
 
                         <hr>
 
-                        <!-- 难度参数 -->
-                        <div class="section-title">📊 学习难度</div>
+                        <!-- 实验方案 -->
+                        <h6 class="mb-2 text-primary">实验方案</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label fw-bold">方案类型</label>
+                                <select class="form-select" id="experimentType">
+                                    <option value="single">单次运行</option>
+                                    <option value="cv">交叉验证</option>
+                                    <option value="learning_curve">学习曲线</option>
+                                </select>
+                            </div>
 
-                        <div class="mb-2">
+                            <!-- 交叉验证配置 -->
+                            <div class="col-md-6 mb-2" id="cvConfig" style="display: none;">
+                                <label class="form-label">折数</label>
+                                <select class="form-select" id="nFolds">
+                                    <option value="3">3折</option>
+                                    <option value="5" selected>5折</option>
+                                    <option value="10">10折</option>
+                                </select>
+                                <small class="form-text text-muted">运行N次，使用不同的随机种子</small>
+                            </div>
+
+                            <!-- 学习曲线配置 -->
+                            <div class="col-md-6 mb-2" id="lcConfigSimple" style="display: none;">
+                                <label class="form-label">训练集比例</label>
+                                <input type="text" class="form-control" id="trainSizes" value="0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0">
+                                <small class="form-text text-muted">逗号分隔</small>
+                            </div>
+                        </div>
+
+                        <!-- 学习曲线详细参数 -->
+                        <div id="lcConfig" style="display: none;">
+                            <div class="row mt-2">
+                                <div class="col-md-6 mb-2">
+                                    <label class="form-label">每个点重复次数</label>
+                                    <select class="form-select" id="lcRuns">
+                                        <option value="1">1次</option>
+                                        <option value="3" selected>3次</option>
+                                        <option value="5">5次</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <hr>
+                            <h6 class="mb-2">学习曲线参数</h6>
+
+                            <div class="row">
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">10%准确率</label>
+                                    <input type="range" class="form-range" id="lcAcc10"
+                                           min="0.3" max="0.8" step="0.05" value="0.55">
+                                    <div class="text-end">
+                                        <span class="badge bg-primary" id="lcAcc10Value">0.55</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">100%准确率</label>
+                                    <input type="range" class="form-range" id="lcAcc100"
+                                           min="0.6" max="0.98" step="0.05" value="0.85">
+                                    <div class="text-end">
+                                        <span class="badge bg-primary" id="lcAcc100Value">0.85</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">学习速度 (α)</label>
+                                    <input type="range" class="form-range" id="lcAlpha"
+                                           min="1.0" max="5.0" step="0.5" value="2.5">
+                                    <div class="text-end">
+                                        <span class="badge bg-primary" id="lcAlphaValue">2.5</span>
+                                    </div>
+                                    <small class="form-text text-muted">越大曲线越陡</small>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">噪声强度</label>
+                                    <input type="range" class="form-range" id="lcNoise"
+                                           min="0.01" max="0.05" step="0.01" value="0.02">
+                                    <div class="text-end">
+                                        <span class="badge bg-primary" id="lcNoiseValue">0.02</span>
+                                    </div>
+                                    <small class="form-text text-muted">小数据波动</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-2 mb-0" role="alert">
+                            <small>
+                                💡 <strong>提示：</strong> 先确定任务类型，再选择实验方案。学习曲线模式下可自定义性能参数。
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右列：数据集特性 -->
+            <div class="col-lg-5 col-md-5 mb-3">
+                <div class="card h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">📊 数据集特性</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
                             <label class="form-label">类间可分性</label>
                             <input type="range" class="form-range" id="separability" min="0" max="1" step="0.05" value="0.7">
                             <div class="d-flex justify-content-between">
@@ -153,7 +251,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-2">
+                        <div class="mb-3">
                             <label class="form-label">标签噪声</label>
                             <input type="range" class="form-range" id="labelNoise" min="0" max="0.5" step="0.01" value="0.05">
                             <div class="text-center">
@@ -161,7 +259,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-2">
+                        <div class="mb-3">
                             <label class="form-label">特征噪声</label>
                             <input type="range" class="form-range" id="featureNoise" min="0" max="0.5" step="0.01" value="0.1">
                             <div class="text-center">
@@ -169,7 +267,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-2">
+                        <div class="mb-3">
                             <label class="form-label">非线性强度</label>
                             <input type="range" class="form-range" id="nonlinearity" min="0" max="1" step="0.05" value="0.3">
                             <div class="text-center">
@@ -179,25 +277,37 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 右侧：模型参数配置 -->
-            <div class="col-lg-9 col-md-8 mb-3">
+        <!-- 第二行：模型能力配置 -->
+        <div class="row mb-3">
+            <div class="col-12">
                 <div class="card">
-                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">🤖 模型能力配置</h5>
-                        <div>
-                            <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#addModelModal">
-                                ➕ 添加自定义模型
-                            </button>
-                            <button class="btn btn-sm btn-light ms-2" id="expandAllBtn">展开全部</button>
-                            <button class="btn btn-sm btn-light" id="collapseAllBtn">收起全部</button>
+                    <div class="card-header bg-success text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">🤖 模型能力配置</h5>
+                            <div>
+                                <button class="btn btn-sm btn-light" id="expandAllBtn">展开全部</button>
+                                <button class="btn btn-sm btn-light" id="collapseAllBtn">收起全部</button>
+                                <button class="btn btn-sm btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#addModelModal">
+                                    ➕ 添加自定义模型
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                            <small class="text-white">批量操作：</small>
+                            <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('binary')">二分类模型</button>
+                            <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('multiclass')">多分类模型</button>
+                            <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('regression')">回归模型</button>
+                            <button class="btn btn-sm btn-outline-light" onclick="selectAllModels()">全选</button>
+                            <button class="btn btn-sm btn-outline-light" onclick="deselectAllModels()">全不选</button>
                         </div>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-12">
                                 <small class="text-muted">
-                                    💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
+                                    💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。切换任务类型时会自动勾选对应模型。
                                 </small>
                             </div>
                         </div>
@@ -225,7 +335,7 @@
             </div>
         </div>
 
-        <!-- 第二行：对比结果 -->
+        <!-- 第三行：对比结果 -->
         <div class="row">
             <div class="col-12">
                 <div class="card">
@@ -317,6 +427,29 @@
                                    required
                                    maxlength="20">
                             <small class="form-text text-muted">只能包含字母、数字、下划线，最多20个字符</small>
+                        </div>
+
+                        <hr>
+                        <h6 class="mb-3">支持的任务类型</h6>
+                        <div class="mb-3">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="newModelTaskBinary" checked>
+                                <label class="form-check-label" for="newModelTaskBinary">
+                                    <span class="badge bg-primary">二分类</span>
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="newModelTaskMulticlass" checked>
+                                <label class="form-check-label" for="newModelTaskMulticlass">
+                                    <span class="badge bg-success">多分类</span>
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="newModelTaskRegression" checked>
+                                <label class="form-check-label" for="newModelTaskRegression">
+                                    <span class="badge bg-info">回归</span>
+                                </label>
+                            </div>
                         </div>
 
                         <hr>

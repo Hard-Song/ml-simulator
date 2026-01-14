@@ -1,21 +1,52 @@
 // 全局变量
 let charts = {};
 let lastResults = null;
+let lastExperimentType = 'single';  // 记录最后一次的实验方案类型
 let modelProfiles = {};  // 存储每个模型的能力参数
 let customModels = [];  // 存储自定义模型名称
 
 // 预定义模型能力画像
 const DEFAULT_PROFILES = {
-    'svm': { bias: 0.5, variance: 0.2, capacity: 0.6, noise_tolerance: 0.4 },
-    'rf': { bias: 0.3, variance: 0.4, capacity: 0.7, noise_tolerance: 0.8 },
-    'lgbm': { bias: 0.3, variance: 0.3, capacity: 0.8, noise_tolerance: 0.6 },
-    'dnn': { bias: 0.2, variance: 0.7, capacity: 0.95, noise_tolerance: 0.5 },
-    'cnn': { bias: 0.3, variance: 0.5, capacity: 0.85, noise_tolerance: 0.6 },
-    'rnn': { bias: 0.4, variance: 0.6, capacity: 0.8, noise_tolerance: 0.5 },
-    'transformer': { bias: 0.2, variance: 0.9, capacity: 0.98, noise_tolerance: 0.4 },
-    'logreg': { bias: 0.5, variance: 0.1, capacity: 0.5, noise_tolerance: 0.5 },
-    'xgboost': { bias: 0.3, variance: 0.3, capacity: 0.8, noise_tolerance: 0.7 },
-    'catboost': { bias: 0.3, variance: 0.25, capacity: 0.78, noise_tolerance: 0.75 },
+    'svm': {
+        bias: 0.5, variance: 0.2, capacity: 0.6, noise_tolerance: 0.4,
+        supported_tasks: ['binary']  // SVM主要支持二分类
+    },
+    'rf': {
+        bias: 0.3, variance: 0.4, capacity: 0.7, noise_tolerance: 0.8,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // RF支持所有任务
+    },
+    'lgbm': {
+        bias: 0.3, variance: 0.3, capacity: 0.8, noise_tolerance: 0.6,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // LightGBM支持所有任务
+    },
+    'dnn': {
+        bias: 0.2, variance: 0.7, capacity: 0.95, noise_tolerance: 0.5,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // DNN支持所有任务
+    },
+    'cnn': {
+        bias: 0.3, variance: 0.5, capacity: 0.85, noise_tolerance: 0.6,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // CNN支持所有任务
+    },
+    'rnn': {
+        bias: 0.4, variance: 0.6, capacity: 0.8, noise_tolerance: 0.5,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // RNN支持所有任务
+    },
+    'transformer': {
+        bias: 0.2, variance: 0.9, capacity: 0.98, noise_tolerance: 0.4,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // Transformer支持所有任务
+    },
+    'logreg': {
+        bias: 0.5, variance: 0.1, capacity: 0.5, noise_tolerance: 0.5,
+        supported_tasks: ['binary', 'multiclass']  // Logistic Regression支持分类任务
+    },
+    'xgboost': {
+        bias: 0.3, variance: 0.3, capacity: 0.8, noise_tolerance: 0.7,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // XGBoost支持所有任务
+    },
+    'catboost': {
+        bias: 0.3, variance: 0.25, capacity: 0.78, noise_tolerance: 0.75,
+        supported_tasks: ['binary', 'multiclass', 'regression']  // CatBoost支持所有任务
+    },
 };
 
 // 初始化
@@ -67,6 +98,22 @@ function generateModelCardHTML(modelName, profile, isCustom) {
         </button>
     ` : '';
 
+    // 生成任务标签
+    const supportedTasks = profile.supported_tasks || ['binary', 'multiclass', 'regression'];
+    const taskBadges = supportedTasks.map(task => {
+        const labels = {
+            'binary': '二分类',
+            'multiclass': '多分类',
+            'regression': '回归'
+        };
+        const colors = {
+            'binary': 'bg-primary',
+            'multiclass': 'bg-success',
+            'regression': 'bg-info'
+        };
+        return `<span class="badge ${colors[task]} me-1" style="font-size: 0.7rem;">${labels[task]}</span>`;
+    }).join('');
+
     return `
         <div class="model-card" id="${modelId}_card">
             <div class="model-card-header" id="${modelId}_header">
@@ -78,10 +125,13 @@ function generateModelCardHTML(modelName, profile, isCustom) {
                                id="${modelId}_checkbox"
                                onclick="event.stopPropagation()">
                     </div>
-                    <span class="fw-bold" style="cursor: pointer;" onclick="toggleModelSelection('${modelName}')">
-                        ${modelName.toUpperCase()}
-                        ${isCustom ? ' <span class="badge bg-warning text-dark">自定义</span>' : ''}
-                    </span>
+                    <div style="cursor: pointer;" onclick="toggleModelSelection('${modelName}')">
+                        <span class="fw-bold">
+                            ${modelName.toUpperCase()}
+                            ${isCustom ? ' <span class="badge bg-warning text-dark">自定义</span>' : ''}
+                        </span>
+                        <div class="mt-1">${taskBadges}</div>
+                    </div>
                 </div>
                 <div class="d-flex align-items-center">
                     ${deleteBtn}
@@ -195,7 +245,13 @@ function resetModelProfile(modelName) {
 
     if (customModels.includes(modelName)) {
         // 自定义模型没有默认值，使用中等配置
-        defaultProfile = { bias: 0.5, variance: 0.5, capacity: 0.7, noise_tolerance: 0.5 };
+        defaultProfile = {
+            bias: 0.5,
+            variance: 0.5,
+            capacity: 0.7,
+            noise_tolerance: 0.5,
+            supported_tasks: modelProfiles[modelName].supported_tasks || ['binary', 'multiclass', 'regression']
+        };
     } else {
         defaultProfile = DEFAULT_PROFILES[modelName];
     }
@@ -253,12 +309,30 @@ function addCustomModel() {
         return;
     }
 
+    // 获取选中的任务类型
+    const supportedTasks = [];
+    if (document.getElementById('newModelTaskBinary').checked) {
+        supportedTasks.push('binary');
+    }
+    if (document.getElementById('newModelTaskMulticlass').checked) {
+        supportedTasks.push('multiclass');
+    }
+    if (document.getElementById('newModelTaskRegression').checked) {
+        supportedTasks.push('regression');
+    }
+
+    if (supportedTasks.length === 0) {
+        showAlert('请至少选择一种任务类型', 'warning');
+        return;
+    }
+
     // 获取参数
     const profile = {
         bias: parseFloat(document.getElementById('newModelBias').value),
         variance: parseFloat(document.getElementById('newModelVariance').value),
         capacity: parseFloat(document.getElementById('newModelCapacity').value),
         noise_tolerance: parseFloat(document.getElementById('newModelNoiseTol').value),
+        supported_tasks: supportedTasks,
     };
 
     // 添加到列表
@@ -307,9 +381,20 @@ function bindEvents() {
     bindSlider('newModelCapacity', 'newModelCapacityValue');
     bindSlider('newModelNoiseTol', 'newModelNoiseTolValue');
 
+    // 学习曲线参数滑块
+    bindSlider('lcAcc10', 'lcAcc10Value');
+    bindSlider('lcAcc100', 'lcAcc100Value');
+    bindSlider('lcAlpha', 'lcAlphaValue');
+    bindSlider('lcNoise', 'lcNoiseValue');
+
     // 任务类型切换
     document.getElementById('taskType').addEventListener('change', function() {
         updateUIForTaskType(this.value);
+    });
+
+    // 实验方案类型切换
+    document.getElementById('experimentType').addEventListener('change', function() {
+        updateUIForExperimentType(this.value);
     });
 
     // 展开全部
@@ -400,6 +485,184 @@ function updateUIForTaskType(taskType) {
         nClassesGroup.style.display = 'block';
         labelDistGroup.style.display = 'block';
     }
+
+    // 自动勾选支持该任务类型的模型
+    autoSelectModelsForTask(taskType);
+}
+
+// 根据实验方案类型更新UI
+function updateUIForExperimentType(experimentType) {
+    const cvConfig = document.getElementById('cvConfig');
+    const lcConfigSimple = document.getElementById('lcConfigSimple');
+    const lcConfig = document.getElementById('lcConfig');
+
+    // 隐藏所有配置
+    cvConfig.style.display = 'none';
+    lcConfigSimple.style.display = 'none';
+    lcConfig.style.display = 'none';
+
+    // 根据类型显示对应配置
+    if (experimentType === 'cv') {
+        cvConfig.style.display = 'block';
+    } else if (experimentType === 'learning_curve') {
+        lcConfigSimple.style.display = 'block';
+        lcConfig.style.display = 'block';
+    }
+}
+
+// =============================================================================
+// 批量操作函数
+// =============================================================================
+
+// 根据任务类型自动选择模型
+function autoSelectModelsForTask(taskType) {
+    // 先取消所有选择
+    deselectAllModels();
+
+    // 根据任务类型选择对应模型
+    selectModelsByTask(taskType, false);  // false = 不显示提示
+
+    // 显示提示
+    const taskNames = {
+        'binary': '二分类',
+        'multiclass': '多分类',
+        'regression': '回归'
+    };
+    showAlert(`已自动选中支持${taskNames[taskType]}的模型`, 'info');
+}
+
+// 根据任务类型选择模型
+function selectModelsByTask(taskType, showPrompt = true) {
+    // 先取消所有选中
+    deselectAllModels();
+
+    const checkboxes = document.querySelectorAll('.model-select-checkbox');
+    let selectedCount = 0;
+
+    checkboxes.forEach(checkbox => {
+        const modelName = checkbox.value;
+        let profile;
+
+        // 获取模型配置
+        if (customModels.includes(modelName)) {
+            profile = modelProfiles[modelName];
+        } else {
+            profile = DEFAULT_PROFILES[modelName];
+        }
+
+        // 检查模型是否支持该任务类型
+        const supportedTasks = profile.supported_tasks || ['binary', 'multiclass', 'regression'];
+
+        if (supportedTasks.includes(taskType)) {
+            checkbox.checked = true;
+            updateModelCardSelection(modelName, true);
+            selectedCount++;
+        }
+    });
+
+    // 显示提示（如果需要）
+    if (showPrompt) {
+        const taskNames = {
+            'binary': '二分类',
+            'multiclass': '多分类',
+            'regression': '回归'
+        };
+        showAlert(`已选中 ${selectedCount} 个支持${taskNames[taskType]}的模型`, 'success');
+    }
+}
+
+// 全选模型
+function selectAllModels() {
+    const checkboxes = document.querySelectorAll('.model-select-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+        updateModelCardSelection(checkbox.value, true);
+    });
+    showAlert('已选中所有模型', 'info');
+}
+
+// 全不选模型
+function deselectAllModels() {
+    const checkboxes = document.querySelectorAll('.model-select-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        updateModelCardSelection(checkbox.value, false);
+    });
+}
+
+// 更新模型卡片的选中状态
+function updateModelCardSelection(modelName, isSelected) {
+    const card = document.getElementById(`model_${modelName}_card`);
+    const header = document.getElementById(`model_${modelName}_header`);
+
+    if (card && header) {
+        if (isSelected) {
+            card.classList.add('selected');
+            header.style.backgroundColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            header.style.color = 'white';
+        } else {
+            card.classList.remove('selected');
+            header.style.backgroundColor = '';
+            header.style.color = '';
+        }
+    }
+}
+
+// 绘制误差线
+function drawErrorBars(chart) {
+    const ctx = chart.ctx;
+    const yScale = chart.scales.y;
+
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+        if (!dataset.errorBars || !dataset.errorBars.some(e => e > 0)) {
+            return;
+        }
+
+        const meta = chart.getDatasetMeta(datasetIndex);
+        const errorData = dataset.errorBars;
+
+        meta.data.forEach((bar, index) => {
+            const value = dataset.data[index];
+            const error = errorData[index];
+
+            if (!error || error === 0) return;
+
+            const x = bar.x;
+            const y = bar.y;
+            const baseWidth = bar.width;
+
+            // 计算误差条的位置
+            const yTop = yScale.getPixelForValue(value + error);
+            const yBottom = yScale.getPixelForValue(value - error);
+            const barTop = y;
+
+            // 绘制误差线
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            // 垂直线
+            ctx.moveTo(x, Math.min(yTop, barTop));
+            ctx.lineTo(x, Math.max(yBottom, barTop));
+            ctx.stroke();
+
+            // 顶部横线
+            const lineWidth = Math.min(15, baseWidth * 0.4);
+            ctx.beginPath();
+            ctx.moveTo(x - lineWidth / 2, Math.min(yTop, barTop));
+            ctx.lineTo(x + lineWidth / 2, Math.min(yTop, barTop));
+            ctx.stroke();
+
+            // 底部横线
+            ctx.beginPath();
+            ctx.moveTo(x - lineWidth / 2, Math.max(yBottom, barTop));
+            ctx.lineTo(x + lineWidth / 2, Math.max(yBottom, barTop));
+            ctx.stroke();
+
+            ctx.restore();
+        });
+    });
 }
 
 // 初始化图表
@@ -414,6 +677,7 @@ function initCharts() {
                 label: '准确率',
                 data: [],
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                errorBars: null
             }]
         },
         options: {
@@ -423,8 +687,17 @@ function initCharts() {
                     beginAtZero: true,
                     max: 1
                 }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                }
             }
-        }
+        },
+        plugins: [{
+            id: 'errorBars',
+            afterDatasetsDraw: (chart) => drawErrorBars(chart)
+        }]
     });
 
     // 柱状图2
@@ -437,6 +710,7 @@ function initCharts() {
                 label: 'F1',
                 data: [],
                 backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                errorBars: null
             }]
         },
         options: {
@@ -446,8 +720,17 @@ function initCharts() {
                     beginAtZero: true,
                     max: 1
                 }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                }
             }
-        }
+        },
+        plugins: [{
+            id: 'errorBars',
+            afterDatasetsDraw: (chart) => drawErrorBars(chart)
+        }]
     });
 
     // 雷达图
@@ -505,7 +788,8 @@ async function runSimulation() {
 
         if (data.success) {
             lastResults = data.results;
-            displayResults(data.results);
+            lastExperimentType = data.experiment_type || 'single';
+            displayResults(data.results, data.experiment_type);
             showAlert('模拟完成！', 'success');
         } else {
             showAlert('模拟失败: ' + data.error, 'danger');
@@ -552,6 +836,28 @@ function buildRequestData(models) {
         models_config[modelName] = modelProfiles[modelName];
     });
 
+    // 构建实验方案配置
+    const experimentType = document.getElementById('experimentType').value;
+    let experimentConfig = {
+        type: experimentType,
+    };
+
+    if (experimentType === 'cv') {
+        experimentConfig.n_folds = parseInt(document.getElementById('nFolds').value);
+    } else if (experimentType === 'learning_curve') {
+        const trainSizesStr = document.getElementById('trainSizes').value.trim();
+        experimentConfig.train_sizes = trainSizesStr.split(',').map(s => parseFloat(s.trim()));
+        experimentConfig.n_runs = parseInt(document.getElementById('lcRuns').value);
+
+        // 学习曲线参数
+        experimentConfig.lc_params = {
+            acc_10: parseFloat(document.getElementById('lcAcc10').value),
+            acc_100: parseFloat(document.getElementById('lcAcc100').value),
+            alpha: parseFloat(document.getElementById('lcAlpha').value),
+            noise_std_start: parseFloat(document.getElementById('lcNoise').value),
+        };
+    }
+
     return {
         task_type: taskType,
         num_samples: numSamples,
@@ -560,18 +866,19 @@ function buildRequestData(models) {
         models: models,
         difficulty: difficulty,
         models_config: models_config,
+        experiment_config: experimentConfig,
         random_state: 42,
     };
 }
 
 // 显示结果
-function displayResults(results) {
-    updateTable(results);
-    updateCharts(results);
+function displayResults(results, experimentType) {
+    updateTable(results, experimentType);
+    updateCharts(results, experimentType);
 }
 
 // 更新表格
-function updateTable(results) {
+function updateTable(results, experimentType) {
     const taskType = document.getElementById('taskType').value;
     const thead = document.querySelector('#resultsTableHead tr');
     const tbody = document.querySelector('#resultsTable tbody');
@@ -580,19 +887,49 @@ function updateTable(results) {
     thead.innerHTML = '';
     tbody.innerHTML = '';
 
-    // 根据任务类型设置表头
+    // 根据任务类型和实验方案设置表头
     let headers = [];
     let metrics = [];
 
+    // 对于交叉验证和学习曲线，字段名包含 _mean 和 _std 后缀
+    const isStatistical = experimentType === 'cv' || experimentType === 'learning_curve';
+
     if (taskType === 'regression') {
-        headers = ['模型', 'MAE', 'RMSE', 'R²'];
-        metrics = ['mae', 'rmse', 'r2'];
+        if (isStatistical) {
+            headers = ['模型', 'MAE', 'RMSE', 'R²'];
+            metrics = [['mae_mean', 'mae_std'], ['rmse_mean', 'rmse_std'], ['r2_mean', 'r2_std']];
+        } else {
+            headers = ['模型', 'MAE', 'RMSE', 'R²'];
+            metrics = ['mae', 'rmse', 'r2'];
+        }
     } else if (taskType === 'multiclass') {
-        headers = ['模型', '准确率', 'Macro-F1', 'Weighted-F1', 'LogLoss', 'Top-3'];
-        metrics = ['accuracy', 'macro_f1', 'weighted_f1', 'logloss', 'top_3_accuracy'];
+        if (isStatistical) {
+            headers = ['模型', '准确率', 'Macro-F1', 'Weighted-F1', 'LogLoss'];
+            metrics = [
+                ['accuracy_mean', 'accuracy_std'],
+                ['macro_f1_mean', 'macro_f1_std'],
+                ['weighted_f1_mean', 'weighted_f1_std'],
+                ['logloss_mean', 'logloss_std']
+            ];
+        } else {
+            headers = ['模型', '准确率', 'Macro-F1', 'Weighted-F1', 'LogLoss', 'Top-3'];
+            metrics = ['accuracy', 'macro_f1', 'weighted_f1', 'logloss', 'top_3_accuracy'];
+        }
     } else {  // binary
-        headers = ['模型', '准确率', 'Precision', 'Recall', 'F1', 'ROC-AUC', 'PR-AUC', 'LogLoss'];
-        metrics = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc', 'logloss'];
+        if (isStatistical) {
+            headers = ['模型', '准确率', 'Precision', 'Recall', 'F1', 'ROC-AUC', 'PR-AUC'];
+            metrics = [
+                ['accuracy_mean', 'accuracy_std'],
+                ['precision_mean', 'precision_std'],
+                ['recall_mean', 'recall_std'],
+                ['f1_mean', 'f1_std'],
+                ['roc_auc_mean', 'roc_auc_std'],
+                ['pr_auc_mean', 'pr_auc_std']
+            ];
+        } else {
+            headers = ['模型', '准确率', 'Precision', 'Recall', 'F1', 'ROC-AUC', 'PR-AUC', 'LogLoss'];
+            metrics = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc', 'logloss'];
+        }
     }
 
     // 添加表头
@@ -608,20 +945,34 @@ function updateTable(results) {
 
         // 模型名称
         const modelCell = document.createElement('td');
-        modelCell.textContent = row.model.toUpperCase();
+        let modelName = row.model;
+        if (experimentType === 'learning_curve' && row.train_size !== undefined) {
+            modelName += ` (${(row.train_size * 100).toFixed(0)}%)`;
+        }
+        modelCell.textContent = modelName.toUpperCase();
         modelCell.style.fontWeight = 'bold';
         tr.appendChild(modelCell);
 
         // 指标数据
         metrics.forEach(metric => {
-            const value = row[metric];
-            if (value === undefined || value === null) {
-                addCell(tr, 'N/A');
-            } else if (metric === 'accuracy' || metric === 'top_3_accuracy' ||
-                       metric === 'macro_f1' || metric === 'weighted_f1') {
-                addCell(tr, (value * 100).toFixed(2) + '%');
+            if (isStatistical) {
+                // 统计结果：显示 均值 ± 标准差
+                const meanVal = row[metric[0]];
+                const stdVal = row[metric[1]];
+
+                if (meanVal === undefined || meanVal === null) {
+                    addCell(tr, 'N/A');
+                } else {
+                    addCell(tr, `${meanVal.toFixed(4)} ± ${stdVal.toFixed(4)}`);
+                }
             } else {
-                addCell(tr, value.toFixed(4));
+                // 单次结果
+                const value = row[metric];
+                if (value === undefined || value === null) {
+                    addCell(tr, 'N/A');
+                } else {
+                    addCell(tr, value.toFixed(4));
+                }
             }
         });
 
@@ -637,9 +988,9 @@ function addCell(row, text) {
 }
 
 // 更新图表
-function updateCharts(results) {
-    const models = results.map(r => r.model.toUpperCase());
+function updateCharts(results, experimentType) {
     const taskType = document.getElementById('taskType').value;
+    const isStatistical = experimentType === 'cv' || experimentType === 'learning_curve';
 
     const colors = [
         'rgba(54, 162, 235, 0.6)',
@@ -649,26 +1000,59 @@ function updateCharts(results) {
         'rgba(153, 102, 255, 0.6)',
     ];
 
+    // 学习曲线使用折线图，其他使用柱状图
+    if (experimentType === 'learning_curve') {
+        updateLearningCurveCharts(results, taskType, colors);
+    } else {
+        // 单次运行或交叉验证使用柱状图
+        updateBarCharts(results, taskType, isStatistical, colors);
+    }
+}
+
+// 更新柱状图（单次运行和交叉验证）
+function updateBarCharts(results, taskType, isStatistical, colors) {
+    const models = results.map(r => r.model.toUpperCase());
+
+    // 获取指标值（均值）和误差（标准差）
+    const getValue = (row, metric) => {
+        if (isStatistical) {
+            return row[metric + '_mean'];
+        }
+        return row[metric];
+    };
+
+    const getError = (row, metric) => {
+        if (isStatistical) {
+            return row[metric + '_std'];
+        }
+        return 0;
+    };
+
     if (taskType === 'regression') {
         document.getElementById('chart1Title').textContent = 'MAE 对比';
         document.getElementById('chart2Title').textContent = 'RMSE 对比';
 
+        // Chart 1: MAE
         charts.chart1.data.labels = models;
         charts.chart1.data.datasets[0].label = 'MAE';
-        charts.chart1.data.datasets[0].data = results.map(r => r.mae);
+        charts.chart1.data.datasets[0].data = results.map(r => getValue(r, 'mae'));
         charts.chart1.data.datasets[0].backgroundColor = colors[0];
+        charts.chart1.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'mae')) : null;
         charts.chart1.update();
 
+        // Chart 2: RMSE
         charts.chart2.data.labels = models;
         charts.chart2.data.datasets[0].label = 'RMSE';
-        charts.chart2.data.datasets[0].data = results.map(r => r.rmse);
+        charts.chart2.data.datasets[0].data = results.map(r => getValue(r, 'rmse'));
         charts.chart2.data.datasets[0].backgroundColor = colors[1];
+        charts.chart2.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'rmse')) : null;
         charts.chart2.update();
 
+        // Radar chart
         charts.radar.data.labels = ['1-MAE', '1-RMSE', 'R²'];
         charts.radar.data.datasets = results.map((r, i) => ({
             label: r.model.toUpperCase(),
-            data: [1 - r.mae, 1 - r.rmse, r.r2],
+            data: [1 - getValue(r, 'mae'), 1 - getValue(r, 'rmse'), getValue(r, 'r2')],
             backgroundColor: colors[i % colors.length],
         }));
         charts.radar.update();
@@ -677,22 +1061,33 @@ function updateCharts(results) {
         document.getElementById('chart1Title').textContent = '准确率对比';
         document.getElementById('chart2Title').textContent = 'Macro-F1 对比';
 
+        // Chart 1: Accuracy
         charts.chart1.data.labels = models;
         charts.chart1.data.datasets[0].label = '准确率';
-        charts.chart1.data.datasets[0].data = results.map(r => r.accuracy);
+        charts.chart1.data.datasets[0].data = results.map(r => getValue(r, 'accuracy'));
         charts.chart1.data.datasets[0].backgroundColor = colors[0];
+        charts.chart1.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'accuracy')) : null;
         charts.chart1.update();
 
+        // Chart 2: Macro-F1
         charts.chart2.data.labels = models;
         charts.chart2.data.datasets[0].label = 'Macro-F1';
-        charts.chart2.data.datasets[0].data = results.map(r => r.macro_f1);
+        charts.chart2.data.datasets[0].data = results.map(r => getValue(r, 'macro_f1'));
         charts.chart2.data.datasets[0].backgroundColor = colors[1];
+        charts.chart2.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'macro_f1')) : null;
         charts.chart2.update();
 
+        // Radar chart
         charts.radar.data.labels = ['准确率', 'Macro-F1', 'Weighted-F1', '1-LogLoss', 'Top-3'];
         charts.radar.data.datasets = results.map((r, i) => ({
             label: r.model.toUpperCase(),
-            data: [r.accuracy, r.macro_f1, r.weighted_f1, 1 / (1 + r.logloss), r.top_3_accuracy],
+            data: [
+                getValue(r, 'accuracy'),
+                getValue(r, 'macro_f1'),
+                getValue(r, 'weighted_f1'),
+                1 / (1 + getValue(r, 'logloss')),
+                isStatistical ? 0.9 : getValue(r, 'top_3_accuracy')
+            ],
             backgroundColor: colors[i % colors.length],
         }));
         charts.radar.update();
@@ -701,26 +1096,114 @@ function updateCharts(results) {
         document.getElementById('chart1Title').textContent = 'ROC-AUC 对比';
         document.getElementById('chart2Title').textContent = 'PR-AUC 对比';
 
+        // Chart 1: ROC-AUC
         charts.chart1.data.labels = models;
         charts.chart1.data.datasets[0].label = 'ROC-AUC';
-        charts.chart1.data.datasets[0].data = results.map(r => r.roc_auc);
+        charts.chart1.data.datasets[0].data = results.map(r => getValue(r, 'roc_auc'));
         charts.chart1.data.datasets[0].backgroundColor = colors[0];
+        charts.chart1.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'roc_auc')) : null;
         charts.chart1.update();
 
+        // Chart 2: PR-AUC
         charts.chart2.data.labels = models;
         charts.chart2.data.datasets[0].label = 'PR-AUC';
-        charts.chart2.data.datasets[0].data = results.map(r => r.pr_auc);
+        charts.chart2.data.datasets[0].data = results.map(r => getValue(r, 'pr_auc'));
         charts.chart2.data.datasets[0].backgroundColor = colors[1];
+        charts.chart2.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'pr_auc')) : null;
         charts.chart2.update();
 
+        // Radar chart
         charts.radar.data.labels = ['准确率', 'ROC-AUC', 'PR-AUC', 'Precision', 'Recall', 'F1'];
         charts.radar.data.datasets = results.map((r, i) => ({
             label: r.model.toUpperCase(),
-            data: [r.accuracy, r.roc_auc, r.pr_auc, r.precision, r.recall, r.f1],
+            data: [
+                getValue(r, 'accuracy'),
+                getValue(r, 'roc_auc'),
+                getValue(r, 'pr_auc'),
+                getValue(r, 'precision'),
+                getValue(r, 'recall'),
+                getValue(r, 'f1')
+            ],
             backgroundColor: colors[i % colors.length],
         }));
         charts.radar.update();
     }
+}
+
+// 更新学习曲线图表
+function updateLearningCurveCharts(results, taskType, colors) {
+    // 按模型分组
+    const modelGroups = {};
+    results.forEach(r => {
+        if (!modelGroups[r.model]) {
+            modelGroups[r.model] = [];
+        }
+        modelGroups[r.model].push(r);
+    });
+
+    // 获取训练集大小
+    const trainSizes = [...new Set(results.map(r => r.train_size))].sort((a, b) => a - b);
+    const labels = trainSizes.map(s => (s * 100).toFixed(0) + '%');
+
+    // 选择主要指标
+    let metric1, metric2;
+    if (taskType === 'regression') {
+        metric1 = 'mae_mean';
+        metric2 = 'rmse_mean';
+        document.getElementById('chart1Title').textContent = 'MAE 学习曲线';
+        document.getElementById('chart2Title').textContent = 'RMSE 学习曲线';
+    } else if (taskType === 'multiclass') {
+        metric1 = 'accuracy_mean';
+        metric2 = 'macro_f1_mean';
+        document.getElementById('chart1Title').textContent = '准确率学习曲线';
+        document.getElementById('chart2Title').textContent = 'Macro-F1 学习曲线';
+    } else {  // binary
+        metric1 = 'accuracy_mean';
+        metric2 = 'roc_auc_mean';
+        document.getElementById('chart1Title').textContent = '准确率学习曲线';
+        document.getElementById('chart2Title').textContent = 'ROC-AUC 学习曲线';
+    }
+
+    // 创建数据集
+    const datasets1 = Object.keys(modelGroups).map((model, i) => ({
+        label: model.toUpperCase(),
+        data: trainSizes.map(size => {
+            const row = modelGroups[model].find(r => r.train_size === size);
+            return row ? row[metric1] : null;
+        }),
+        borderColor: colors[i % colors.length].replace('0.6', '1'),
+        backgroundColor: colors[i % colors.length],
+        tension: 0.3,
+        fill: false,
+    }));
+
+    const datasets2 = Object.keys(modelGroups).map((model, i) => ({
+        label: model.toUpperCase(),
+        data: trainSizes.map(size => {
+            const row = modelGroups[model].find(r => r.train_size === size);
+            return row ? row[metric2] : null;
+        }),
+        borderColor: colors[i % colors.length].replace('0.6', '1'),
+        backgroundColor: colors[i % colors.length],
+        tension: 0.3,
+        fill: false,
+    }));
+
+    // 更新图表类型为折线图
+    charts.chart1.config.type = 'line';
+    charts.chart1.data.labels = labels;
+    charts.chart1.data.datasets = datasets1;
+    charts.chart1.update();
+
+    charts.chart2.config.type = 'line';
+    charts.chart2.data.labels = labels;
+    charts.chart2.data.datasets = datasets2;
+    charts.chart2.update();
+
+    // 雷达图不适用于学习曲线，隐藏或显示提示
+    charts.radar.data.labels = [];
+    charts.radar.data.datasets = [];
+    charts.radar.update();
 }
 
 // 导出CSV

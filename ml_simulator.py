@@ -70,6 +70,9 @@ class ModelProfile:
     nonlinearity_sensitivity: float = 1.0
     noise_sensitivity: float = 1.0
 
+    # 支持的任务类型
+    supported_tasks: List[str] = field(default_factory=lambda: ['binary', 'multiclass', 'regression'])
+
 
 # =============================================================================
 # 3. 预定义模型画像（从spec.md提取）
@@ -78,44 +81,54 @@ class ModelProfile:
 PREDEFINED_MODEL_PROFILES: Dict[str, ModelProfile] = {
     "svm": ModelProfile(
         bias=0.5, variance=0.2, capacity=0.6, noise_tolerance=0.4,
-        separability_sensitivity=1.2, nonlinearity_sensitivity=0.3
+        separability_sensitivity=1.2, nonlinearity_sensitivity=0.3,
+        supported_tasks=['binary']  # SVM主要支持二分类
     ),
     "rf": ModelProfile(
         bias=0.3, variance=0.4, capacity=0.7, noise_tolerance=0.8,
-        separability_sensitivity=0.8, nonlinearity_sensitivity=0.6
+        separability_sensitivity=0.8, nonlinearity_sensitivity=0.6,
+        supported_tasks=['binary', 'multiclass', 'regression']  # RF支持所有任务
     ),
     "lgbm": ModelProfile(
         bias=0.3, variance=0.3, capacity=0.8, noise_tolerance=0.6,
         separability_sensitivity=0.9, nonlinearity_sensitivity=0.9,
-        noise_sensitivity=0.7
+        noise_sensitivity=0.7,
+        supported_tasks=['binary', 'multiclass', 'regression']  # LightGBM支持所有任务
     ),
     "dnn": ModelProfile(
         bias=0.2, variance=0.7, capacity=0.95, noise_tolerance=0.5,
-        separability_sensitivity=1.0, nonlinearity_sensitivity=1.0
+        separability_sensitivity=1.0, nonlinearity_sensitivity=1.0,
+        supported_tasks=['binary', 'multiclass', 'regression']  # DNN支持所有任务
     ),
     "cnn": ModelProfile(
         bias=0.3, variance=0.5, capacity=0.85, noise_tolerance=0.6,
-        separability_sensitivity=0.8, nonlinearity_sensitivity=0.9
+        separability_sensitivity=0.8, nonlinearity_sensitivity=0.9,
+        supported_tasks=['binary', 'multiclass', 'regression']  # CNN支持所有任务
     ),
     "rnn": ModelProfile(
         bias=0.4, variance=0.6, capacity=0.8, noise_tolerance=0.5,
-        separability_sensitivity=0.9, nonlinearity_sensitivity=0.8
+        separability_sensitivity=0.9, nonlinearity_sensitivity=0.8,
+        supported_tasks=['binary', 'multiclass', 'regression']  # RNN支持所有任务
     ),
     "transformer": ModelProfile(
         bias=0.2, variance=0.9, capacity=0.98, noise_tolerance=0.4,
-        separability_sensitivity=1.0, nonlinearity_sensitivity=1.0
+        separability_sensitivity=1.0, nonlinearity_sensitivity=1.0,
+        supported_tasks=['binary', 'multiclass', 'regression']  # Transformer支持所有任务
     ),
     "logreg": ModelProfile(
         bias=0.5, variance=0.1, capacity=0.5, noise_tolerance=0.5,
-        separability_sensitivity=1.0, nonlinearity_sensitivity=0.1
+        separability_sensitivity=1.0, nonlinearity_sensitivity=0.1,
+        supported_tasks=['binary', 'multiclass']  # Logistic Regression支持分类任务
     ),
     "xgboost": ModelProfile(
         bias=0.3, variance=0.3, capacity=0.8, noise_tolerance=0.7,
-        separability_sensitivity=0.9, nonlinearity_sensitivity=0.9
+        separability_sensitivity=0.9, nonlinearity_sensitivity=0.9,
+        supported_tasks=['binary', 'multiclass', 'regression']  # XGBoost支持所有任务
     ),
     "catboost": ModelProfile(
         bias=0.3, variance=0.25, capacity=0.78, noise_tolerance=0.75,
-        separability_sensitivity=0.85, nonlinearity_sensitivity=0.85
+        separability_sensitivity=0.85, nonlinearity_sensitivity=0.85,
+        supported_tasks=['binary', 'multiclass', 'regression']  # CatBoost支持所有任务
     ),
 }
 

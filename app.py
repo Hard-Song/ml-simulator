@@ -62,6 +62,7 @@ def get_models():
             'variance': profile.variance,
             'capacity': profile.capacity,
             'noise_tolerance': profile.noise_tolerance,
+            'supported_tasks': profile.supported_tasks,  # 添加支持的任务类型
         }
     return jsonify({
         'success': True,
@@ -89,7 +90,7 @@ def get_task_types():
 @app.route('/api/simulate', methods=['POST'])
 def simulate():
     """
-    执行单次模拟
+    执行模拟（支持单次运行和交叉验证）
 
     请求体：
     {
@@ -111,7 +112,13 @@ def simulate():
             "capacity": 0.8,
             "noise_tolerance": 0.6
         },
-        "random_state": 42
+        "random_state": 42,
+        "experiment_config": {  // 实验方案配置
+            "type": "single" | "cv" | "learning_curve",
+            "n_folds": 5,  // 交叉验证折数
+            "train_sizes": [0.1, 0.2, 0.3, 0.5, 0.7, 1.0],  // 学习曲线训练集比例
+            "n_runs": 3  // 学习曲线每个点重复次数
+        }
     }
     """
     try:
@@ -121,13 +128,19 @@ def simulate():
         task_type_str = data.get('task_type', 'binary')
         task_type = TaskType(task_type_str)
 
+        # 获取实验方案配置
+        experiment_config = data.get('experiment_config', {})
+        experiment_type = experiment_config.get('type', 'single')
+
         # 创建任务配置
+        base_random_state = int(data.get('random_state', 42))
+
         task_config = TaskConfig(
             task_type=task_type,
             num_samples=int(data.get('num_samples', 5000)),
             n_classes=int(data.get('n_classes', 2)),
             label_distribution=data.get('label_distribution'),
-            random_state=int(data.get('random_state', 42)),
+            random_state=base_random_state,
         )
 
         # 创建难度配置
@@ -144,13 +157,12 @@ def simulate():
         model_names = data.get('models', ['lgbm'])
 
         # 处理模型配置
-        models_config = data.get('models_config', {})  # 每个模型的独立配置
-        custom_profile_data = data.get('custom_profile')  # 全局自定义配置（兼容旧版）
+        models_config = data.get('models_config', {})
+        custom_profile_data = data.get('custom_profile')
         model_profiles = {}
 
         from ml_simulator import ModelProfile
 
-        # 优先使用models_config（每个模型独立配置）
         if models_config:
             for model_name in model_names:
                 if model_name in models_config:
@@ -163,7 +175,6 @@ def simulate():
                     )
                     model_profiles[model_name] = profile
         elif custom_profile_data:
-            # 兼容旧版：全局自定义配置
             custom_profile = ModelProfile(
                 bias=float(custom_profile_data.get('bias', 0.5)),
                 variance=float(custom_profile_data.get('variance', 0.3)),
@@ -173,23 +184,183 @@ def simulate():
             for model_name in model_names:
                 model_profiles[model_name] = custom_profile
 
-        # 执行多模型对比
-        results = compare_models(
-            task_config=task_config,
-            difficulty=difficulty,
-            model_names=model_names,
-            custom_profiles=model_profiles if model_profiles else None,
-        )
+        # 根据实验方案类型执行不同的逻辑
+        if experiment_type == 'cv':
+            # 交叉验证：运行多次，返回统计结果
+            n_folds = int(experiment_config.get('n_folds', 5))
+            all_results = []
 
-        # 转换为 JSON 友好格式
-        results_dict = results.to_dict('records')
+            for fold in range(n_folds):
+                # 每折使用不同的random_state
+                fold_task_config = TaskConfig(
+                    task_type=task_config.task_type,
+                    num_samples=task_config.num_samples,
+                    n_classes=task_config.n_classes,
+                    label_distribution=task_config.label_distribution,
+                    random_state=base_random_state + fold,
+                )
 
-        return jsonify({
-            'success': True,
-            'results': results_dict,
-        })
+                fold_results = compare_models(
+                    task_config=fold_task_config,
+                    difficulty=difficulty,
+                    model_names=model_names,
+                    custom_profiles=model_profiles if model_profiles else None,
+                )
+                fold_results['fold'] = fold
+                all_results.append(fold_results)
+
+            # 合并所有折的结果
+            all_df = pd.concat(all_results, ignore_index=True)
+
+            # 计算统计量（均值和标准差）
+            numeric_cols = [c for c in all_df.columns if c not in ['model', 'fold', 'task_type']]
+
+            stats = all_df.groupby('model')[numeric_cols].agg(['mean', 'std'])
+            stats.columns = ['_'.join(col).strip() for col in stats.columns.values]
+            stats = stats.reset_index()
+
+            # 保留单次结果用于详细查看
+            single_results = all_df.to_dict('records')
+
+            return jsonify({
+                'success': True,
+                'experiment_type': 'cv',
+                'n_folds': n_folds,
+                'results': stats.to_dict('records'),  # 统计结果
+                'single_results': single_results,  # 所有折的详细结果
+            })
+
+        elif experiment_type == 'learning_curve':
+            # 学习曲线：不同训练集大小下的性能
+            train_sizes_data = experiment_config.get('train_sizes', [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+            train_sizes = np.array(train_sizes_data)
+            n_runs = int(experiment_config.get('n_runs', 3))
+
+            # 获取用户自定义的学习曲线参数（如果有）
+            lc_params = experiment_config.get('lc_params', {})
+
+            # 学习曲线参数（用户自定义或默认值）
+            alpha = float(lc_params.get('alpha', 2.5))  # 学习速度
+            user_acc_10 = lc_params.get('acc_10')  # 用户指定的10%准确率
+            user_acc_100 = lc_params.get('acc_100')  # 用户指定的100%准确率
+            noise_std_start = float(lc_params.get('noise_std_start', 0.02))  # 小数据时的噪声
+            noise_std_end = 0.005  # 大数据时的噪声
+
+            all_results = []
+            rng = np.random.default_rng(base_random_state)
+
+            # 获取训练集大小的归一化范围
+            s_min, s_max = train_sizes.min(), train_sizes.max()
+
+            for model_name in model_names:
+                profile = model_profiles.get(model_name) if model_profiles else model_name
+
+                # 如果用户没有指定准确率，则根据模型能力估算
+                if user_acc_10 is None or user_acc_100 is None:
+                    # 获取模型能力参数
+                    if isinstance(profile, str):
+                        model_profile_obj = PREDEFINED_MODEL_PROFILES[profile]
+                    else:
+                        model_profile_obj = profile
+
+                    base_capacity = model_profile_obj.capacity
+                    base_variance = model_profile_obj.variance
+                    base_bias = model_profile_obj.bias
+
+                    # 估算10%和100%数据时的性能
+                    acc_10 = user_acc_10 if user_acc_10 is not None else (0.35 + base_capacity * 0.25 - base_variance * 0.15)
+                    acc_100 = user_acc_100 if user_acc_100 is not None else (0.45 + base_capacity * 0.50 - base_bias * 0.1)
+                else:
+                    # 使用用户指定的值
+                    acc_10 = user_acc_10
+                    acc_100 = user_acc_100
+
+                # 确保在合理范围内
+                acc_10 = np.clip(acc_10, 0.2, 0.8)
+                acc_100 = np.clip(acc_100, 0.4, 0.99)
+
+                # 确保大数据性能更好
+                if acc_100 <= acc_10:
+                    acc_100 = acc_10 + 0.15
+
+                for train_size in train_sizes:
+                    # 归一化进度（0到1）
+                    if s_max > s_min:
+                        t = (train_size - s_min) / (s_max - s_min)
+                    else:
+                        t = 1.0
+
+                    for run in range(n_runs):
+                        # 指数饱和学习曲线
+                        base_acc = acc_10 + (acc_100 - acc_10) * (1 - np.exp(-alpha * t))
+
+                        # 添加噪声（小数据时噪声更大，结果更不稳定）
+                        noise_std = noise_std_start * (1 - t) + noise_std_end
+                        noisy_acc = base_acc + rng.normal(0, noise_std)
+                        noisy_acc = np.clip(noisy_acc, 0.2, 0.98)
+
+                        # 调整多个难度参数以匹配目标准确率
+                        # separability: 主要控制可分性
+                        # label_noise: 小数据时标签噪声影响更大
+                        # feature_noise: 小数据时特征噪声影响更大
+                        label_noise_factor = 1.0 + (1.0 - t) * 0.5  # 小数据时增加50%噪声影响
+                        feature_noise_factor = 1.0 + (1.0 - t) * 0.3
+
+                        adjusted_difficulty = DifficultyConfig(
+                            separability=float(noisy_acc),
+                            label_noise=min(0.5, difficulty.label_noise * label_noise_factor),
+                            feature_noise=min(0.5, difficulty.feature_noise * feature_noise_factor),
+                            nonlinearity=difficulty.nonlinearity,
+                            spurious_correlation=difficulty.spurious_correlation,
+                        )
+
+                        # 使用完整的样本量（性能变化通过难度调整实现）
+                        simulator = MLSimulator(
+                            task_config=task_config,
+                            difficulty=adjusted_difficulty,
+                            model_profile=profile,
+                        )
+                        metrics = simulator.simulate()
+                        metrics['model'] = model_name
+                        metrics['train_size'] = float(train_size)
+                        metrics['run'] = run
+                        all_results.append(metrics)
+
+            lc_df = pd.DataFrame(all_results)
+
+            # 计算统计量
+            numeric_cols = [c for c in lc_df.columns if c not in ['model', 'train_size', 'run', 'task_type']]
+            lc_stats = lc_df.groupby(['model', 'train_size'])[numeric_cols].agg(['mean', 'std'])
+            lc_stats.columns = ['_'.join(col).strip() for col in lc_stats.columns.values]
+            lc_stats = lc_stats.reset_index()
+
+            return jsonify({
+                'success': True,
+                'experiment_type': 'learning_curve',
+                'results': lc_stats.to_dict('records'),
+                'single_results': lc_df.to_dict('records'),
+            })
+
+        else:
+            # 单次运行
+            results = compare_models(
+                task_config=task_config,
+                difficulty=difficulty,
+                model_names=model_names,
+                custom_profiles=model_profiles if model_profiles else None,
+            )
+
+            results_dict = results.to_dict('records')
+
+            return jsonify({
+                'success': True,
+                'experiment_type': 'single',
+                'results': results_dict,
+            })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e),
