@@ -37,9 +37,7 @@ python app.py
 ### 3. 访问应用
 
 打开浏览器访问：
-- **主页（多模型对比）**: http://localhost:5000/
-- **学习曲线**: http://localhost:5000/learning_curve
-- **难度扫描**: http://localhost:5000/difficulty_scan
+- **主页（多模型对比）**: http://localhost:8080/
 
 ## 使用指南
 

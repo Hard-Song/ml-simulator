@@ -135,10 +135,19 @@ def simulate():
         # 创建任务配置
         base_random_state = int(data.get('random_state', 42))
 
+        # 根据任务类型确定n_classes
+        n_classes = data.get('n_classes')
+        if task_type != TaskType.REGRESSION:
+            # 分类任务：使用传入的值或默认值2
+            n_classes = int(n_classes) if n_classes is not None else 2
+        else:
+            # 回归任务：n_classes应为None
+            n_classes = None
+
         task_config = TaskConfig(
             task_type=task_type,
             num_samples=int(data.get('num_samples', 5000)),
-            n_classes=int(data.get('n_classes', 2)),
+            n_classes=n_classes,
             label_distribution=data.get('label_distribution'),
             random_state=base_random_state,
         )
@@ -393,11 +402,20 @@ def api_learning_curve():
         task_type_str = data.get('task_type', 'binary')
         task_type = TaskType(task_type_str)
 
+        # 根据任务类型确定n_classes
+        n_classes = data.get('n_classes')
+        if task_type != TaskType.REGRESSION:
+            # 分类任务：使用传入的值或默认值2
+            n_classes = int(n_classes) if n_classes is not None else 2
+        else:
+            # 回归任务：n_classes应为None
+            n_classes = None
+
         # 创建任务配置
         task_config = TaskConfig(
             task_type=task_type,
             num_samples=int(data.get('num_samples', 5000)),
-            n_classes=int(data.get('n_classes', 2)),
+            n_classes=n_classes,
             label_distribution=data.get('label_distribution'),
             random_state=int(data.get('random_state', 42)),
         )
@@ -476,11 +494,20 @@ def api_scan_difficulty():
         task_type_str = data.get('task_type', 'binary')
         task_type = TaskType(task_type_str)
 
+        # 根据任务类型确定n_classes
+        n_classes = data.get('n_classes')
+        if task_type != TaskType.REGRESSION:
+            # 分类任务：使用传入的值或默认值2
+            n_classes = int(n_classes) if n_classes is not None else 2
+        else:
+            # 回归任务：n_classes应为None
+            n_classes = None
+
         # 创建任务配置
         task_config = TaskConfig(
             task_type=task_type,
             num_samples=int(data.get('num_samples', 5000)),
-            n_classes=int(data.get('n_classes', 2)),
+            n_classes=n_classes,
             label_distribution=data.get('label_distribution'),
             random_state=int(data.get('random_state', 42)),
         )

@@ -17,38 +17,60 @@
     <style>
         /* 模型卡片样式 */
         .model-card {
-            border: 2px solid #dee2e6;
+            border: 1px solid #d1d5db;
             border-radius: 8px;
             margin-bottom: 1rem;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            background-color: #ffffff;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
 
         .model-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #9ca3af;
+            transform: translateY(-2px);
         }
 
         .model-card.selected {
-            border-color: #0d6efd;
-            background-color: #f8f9fa;
+            border: 2px solid #4b5563;
+            background-color: #fafafa;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        }
+
+        .model-card.selected:hover {
+            border-color: #374151;
         }
 
         .model-card-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 0.75rem 1rem;
-            border-radius: 6px 6px 0 0;
+            background: linear-gradient(to bottom, #fafafa 0%, #f5f5f5 100%);
+            color: #2c2c2c;
+            padding: 0.875rem 1rem;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #d1d5db;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            pointer-events: none; /* 让点击穿透到卡片 */
+        }
+
+        .model-card.selected .model-card-header {
+            background: linear-gradient(to bottom, #6b7280 0%, #5a6474 100%);
+            color: #ffffff;
+            border-bottom: 2px solid #4b5563;
         }
 
         .model-card-body {
             padding: 1rem;
+            background-color: #ffffff;
+            border-top: 1px solid #e8e8e8;
         }
 
         .model-select-checkbox {
-            width: 1.2rem;
-            height: 1.2rem;
+            width: 1.5rem;
+            height: 1.5rem;
+            cursor: pointer;
+            pointer-events: auto; /* 复选框需要独立响应 */
         }
 
         .param-slider {
@@ -57,44 +79,67 @@
 
         .param-slider label {
             font-size: 0.85rem;
-            font-weight: 600;
+            font-weight: 500;
             margin-bottom: 0.2rem;
             display: flex;
             justify-content: space-between;
+            color: #2c2c2c;
         }
 
         .param-value {
-            color: #0d6efd;
-            font-weight: bold;
+            color: #6b7280;
+            font-weight: 600;
         }
 
         .collapse-button {
             cursor: pointer;
             user-select: none;
+            color: #6b7280;
         }
 
         .section-title {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background-color: #fafafa;
+            color: #2c2c2c;
             padding: 0.5rem 1rem;
             border-radius: 6px;
             margin-bottom: 1rem;
             font-weight: 600;
+            border: 1px solid #e8e8e8;
+        }
+
+        /* 提示信息区域 */
+        .alert-info {
+            background-color: #fafafa;
+            border-color: #e8e8e8;
+            color: #6b7280;
+        }
+
+        /* 表格暗色表头 */
+        .table-dark {
+            background-color: #fafafa !important;
+            color: #2c2c2c !important;
+        }
+
+        .table-dark th {
+            border-color: #e8e8e8 !important;
         }
     </style>
 </head>
 <body>
     <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
-                <i class="bi bi-cpu"></i> ML Simulator
+                ML Simulator
             </a>
-            <span class="navbar-text text-white">
+            <span class="navbar-text">
                 模型性能模拟与对比工具
             </span>
         </div>
     </nav>
+
+    <!-- Toast通知容器 -->
+    <div id="toast-container"></div>
 
     <div class="container-fluid mt-3">
         <!-- 第一行：实验设计 + 数据集特性 -->
@@ -102,7 +147,7 @@
             <!-- 左列：实验设计（合并实验方案 + 任务配置） -->
             <div class="col-lg-7 col-md-7 mb-3">
                 <div class="card h-100">
-                    <div class="card-header bg-primary text-white">
+                    <div class="card-header">
                         <h5 class="mb-0">⚙️ 实验设计</h5>
                     </div>
                     <div class="card-body">
@@ -129,9 +174,9 @@
                         <div class="row mb-3">
                             <div class="col-md-6 mb-2" id="nClassesGroup">
                                 <label class="form-label fw-bold">类别数</label>
-                                <input type="number" class="form-control" id="nClasses" min="2" max="10" value="2">
+                                <input type="number" class="form-control" id="nClasses" min="2" max="10" value="3">
                             </div>
-                            <div class="col-md-6 mb-2">
+                            <div class="col-md-6 mb-2" id="labelDistGroup">
                                 <label class="form-label fw-bold">类别分布</label>
                                 <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
                                 <small class="form-text text-muted">留空=均衡</small>
@@ -237,7 +282,7 @@
             <!-- 右列：数据集特性 -->
             <div class="col-lg-5 col-md-5 mb-3">
                 <div class="card h-100">
-                    <div class="card-header bg-info text-white">
+                    <div class="card-header">
                         <h5 class="mb-0">📊 数据集特性</h5>
                     </div>
                     <div class="card-body">
@@ -283,7 +328,7 @@
         <div class="row mb-3">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header bg-success text-white">
+                    <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">🤖 模型能力配置</h5>
                             <div>
@@ -339,7 +384,7 @@
         <div class="row">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header bg-info text-white">
+                    <div class="card-header">
                         <h5 class="mb-0">📈 对比结果</h5>
                     </div>
                     <div class="card-body">
@@ -405,8 +450,8 @@
             </div>
         </div>
 
-        <!-- 提示信息 -->
-        <div id="alertBox"></div>
+        <!-- 提示信息（已废弃，使用Toast通知系统） -->
+        <div id="alertBox" style="display: none;"></div>
     </div>
 
     <!-- 添加自定义模型模态框 -->

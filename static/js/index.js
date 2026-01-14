@@ -59,6 +59,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化图表
     initCharts();
+
+    // 初始化任务类型UI（根据默认选择隐藏/显示相应字段）
+    const initialTaskType = document.getElementById('taskType').value;
+    updateUIForTaskType(initialTaskType);
 });
 
 // 初始化模型卡片
@@ -92,7 +96,7 @@ function generateModelCardHTML(modelName, profile, isCustom) {
     const modelId = `model_${modelName}`;
     const deleteBtn = isCustom ? `
         <button class="btn btn-sm btn-outline-danger float-end"
-                onclick="deleteCustomModel('${modelName}')"
+                onclick="event.stopPropagation(); deleteCustomModel('${modelName}')"
                 title="删除模型">
             🗑️ 删除
         </button>
@@ -115,17 +119,17 @@ function generateModelCardHTML(modelName, profile, isCustom) {
     }).join('');
 
     return `
-        <div class="model-card" id="${modelId}_card">
+        <div class="model-card" id="${modelId}_card" onclick="toggleModelCard('${modelName}')">
             <div class="model-card-header" id="${modelId}_header">
                 <div class="d-flex align-items-center w-100">
-                    <div class="me-3" style="cursor: pointer;" onclick="toggleModelSelection('${modelName}')">
+                    <div class="me-3">
                         <input class="form-check-input model-select-checkbox"
                                type="checkbox"
                                value="${modelName}"
                                id="${modelId}_checkbox"
-                               onclick="event.stopPropagation()">
+                               onclick="event.stopPropagation(); toggleModelSelection('${modelName}')">
                     </div>
-                    <div style="cursor: pointer;" onclick="toggleModelSelection('${modelName}')">
+                    <div class="flex-grow-1">
                         <span class="fw-bold">
                             ${modelName.toUpperCase()}
                             ${isCustom ? ' <span class="badge bg-warning text-dark">自定义</span>' : ''}
@@ -135,13 +139,13 @@ function generateModelCardHTML(modelName, profile, isCustom) {
                 </div>
                 <div class="d-flex align-items-center">
                     ${deleteBtn}
-                    <span class="collapse-button ms-2" data-bs-toggle="collapse" data-bs-target="#${modelId}_body">
+                    <span class="collapse-button ms-2" id="${modelId}_collapseButton">
                         ▼
                     </span>
                 </div>
             </div>
             <div class="collapse" id="${modelId}_body">
-                <div class="model-card-body">
+                <div class="model-card-body" onclick="event.stopPropagation()">
                     <div class="row">
                         <div class="col-6">
                             <div class="param-slider">
@@ -207,6 +211,27 @@ function generateModelCardHTML(modelName, profile, isCustom) {
     `;
 }
 
+// 切换模型卡片展开/收起
+function toggleModelCard(modelName) {
+    const body = document.getElementById(`model_${modelName}_body`);
+    const button = document.getElementById(`model_${modelName}_collapseButton`);
+
+    if (body && button) {
+        const collapse = new bootstrap.Collapse(body, {
+            toggle: true
+        });
+
+        // 更新箭头方向
+        body.addEventListener('shown.bs.collapse', function() {
+            button.textContent = '▲';
+        }, { once: true });
+
+        body.addEventListener('hidden.bs.collapse', function() {
+            button.textContent = '▼';
+        }, { once: true });
+    }
+}
+
 // 绑定卡片事件（在DOM插入后）
 function bindCardEvents() {
     // 卡片头部点击事件已经在HTML中通过onclick绑定
@@ -223,12 +248,9 @@ function toggleModelSelection(modelName) {
 
     if (checkbox.checked) {
         card.classList.add('selected');
-        header.style.backgroundColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        header.style.color = 'white';
+        // 不再使用内联样式，CSS会处理选中状态
     } else {
         card.classList.remove('selected');
-        header.style.backgroundColor = '';
-        header.style.color = '';
     }
 }
 
@@ -474,16 +496,29 @@ function bindSlider(sliderId, valueId) {
 function updateUIForTaskType(taskType) {
     const nClassesGroup = document.getElementById('nClassesGroup');
     const labelDistGroup = document.getElementById('labelDistGroup');
+    const nClassesInput = document.getElementById('nClasses');
 
     if (taskType === 'regression') {
+        // 回归任务：隐藏类别数和类别分布
         nClassesGroup.style.display = 'none';
         labelDistGroup.style.display = 'none';
     } else if (taskType === 'binary') {
+        // 二分类：隐藏类别数，显示类别分布
         nClassesGroup.style.display = 'none';
         labelDistGroup.style.display = 'block';
+        // 二分类时设置为2
+        nClassesInput.value = 2;
     } else {
+        // 多分类时，显示类别数输入框和类别分布
         nClassesGroup.style.display = 'block';
         labelDistGroup.style.display = 'block';
+        // 如果当前值小于3，则设置为3
+        const currentValue = parseInt(nClassesInput.value);
+        if (currentValue < 3 || isNaN(currentValue)) {
+            nClassesInput.value = 3;
+        }
+        // 同时更新min属性
+        nClassesInput.min = 3;
     }
 
     // 自动勾选支持该任务类型的模型
@@ -593,17 +628,12 @@ function deselectAllModels() {
 // 更新模型卡片的选中状态
 function updateModelCardSelection(modelName, isSelected) {
     const card = document.getElementById(`model_${modelName}_card`);
-    const header = document.getElementById(`model_${modelName}_header`);
 
-    if (card && header) {
+    if (card) {
         if (isSelected) {
             card.classList.add('selected');
-            header.style.backgroundColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            header.style.color = 'white';
         } else {
             card.classList.remove('selected');
-            header.style.backgroundColor = '';
-            header.style.color = '';
         }
     }
 }
@@ -814,7 +844,18 @@ function getSelectedModels() {
 function buildRequestData(models) {
     const taskType = document.getElementById('taskType').value;
     const numSamples = parseInt(document.getElementById('numSamples').value);
-    const nClasses = parseInt(document.getElementById('nClasses').value);
+
+    // 根据任务类型确定n_classes
+    let nClasses;
+    if (taskType === 'binary') {
+        nClasses = 2;
+    } else if (taskType === 'regression') {
+        nClasses = null;  // 回归任务不需要n_classes
+    } else {
+        // 多分类
+        nClasses = parseInt(document.getElementById('nClasses').value);
+    }
+
     const labelDistStr = document.getElementById('labelDistribution').value.trim();
 
     let labelDistribution = null;
@@ -1244,22 +1285,50 @@ async function exportCSV() {
     }
 }
 
-// 显示提示
+// 显示提示（新的Toast通知系统）
 function showAlert(message, type = 'info') {
-    const alertBox = document.getElementById('alertBox');
+    const container = document.getElementById('toast-container');
 
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.role = 'alert';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    // 创建toast元素
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    // 映射类型到中文
+    const typeLabels = {
+        'success': '成功',
+        'error': '错误',
+        'warning': '警告',
+        'info': '提示',
+        'danger': '错误'
+    };
+
+    const typeClass = type === 'danger' ? 'error' : type;
+
+    toast.innerHTML = `
+        <div class="toast-content">
+            <strong>${typeLabels[typeClass] || '提示'}</strong>: ${message}
+        </div>
+        <button class="toast-close" onclick="closeToast(this)">×</button>
     `;
 
-    alertBox.innerHTML = '';
-    alertBox.appendChild(alertDiv);
+    // 添加到容器
+    container.appendChild(toast);
 
+    // 10秒后自动关闭
     setTimeout(() => {
-        alertDiv.remove();
-    }, 5000);
+        closeToast(toast.querySelector('.toast-close'));
+    }, 10000);
+}
+
+// 关闭Toast
+function closeToast(button) {
+    const toast = button.closest('.toast');
+    if (toast && !toast.classList.contains('toast-hiding')) {
+        toast.classList.add('toast-hiding');
+
+        // 等待动画完成后移除元素
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }
 }
