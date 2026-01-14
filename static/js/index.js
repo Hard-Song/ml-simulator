@@ -4,6 +4,7 @@ let lastResults = null;
 let lastExperimentType = 'single';  // 记录最后一次的实验方案类型
 let modelProfiles = {};  // 存储每个模型的能力参数
 let customModels = [];  // 存储自定义模型名称
+let currentTaskMode = 'classification';  // 当前任务模式：'classification' 或 'regression'
 
 // 预定义模型能力画像
 const DEFAULT_PROFILES = {
@@ -59,11 +60,196 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化图表
     initCharts();
+    initRegressionCharts();
 
     // 初始化任务类型UI（根据默认选择隐藏/显示相应字段）
     const initialTaskType = document.getElementById('taskType').value;
     updateUIForTaskType(initialTaskType);
+
+    // 初始化回归任务的模型卡片
+    initializeRegressionModelCards();
 });
+
+// 切换任务模式（分类/回归）
+function switchTaskMode(mode) {
+    currentTaskMode = mode;
+
+    if (mode === 'classification') {
+        // 切换到分类任务，自动选择支持分类的模型
+        selectModelsByTask('binary');
+    } else if (mode === 'regression') {
+        // 切换到回归任务，自动选择支持回归的模型
+        selectModelsByTask('regression');
+    }
+}
+
+// 初始化回归任务的模型卡片
+function initializeRegressionModelCards() {
+    const container = document.getElementById('regressionModelCardsContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // 首先添加预定义模型
+    for (const [modelName, defaultProfile] of Object.entries(DEFAULT_PROFILES)) {
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6';
+        col.innerHTML = generateRegressionModelCardHTML(modelName, defaultProfile, false);
+        container.appendChild(col);
+    }
+
+    // 然后添加自定义模型
+    customModels.forEach(modelName => {
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6';
+        col.innerHTML = generateRegressionModelCardHTML(modelName, modelProfiles[modelName], true);
+        container.appendChild(col);
+    });
+
+    // 重新绑定事件
+    bindRegressionCardEvents();
+}
+
+// 生成回归任务的模型卡片HTML
+function generateRegressionModelCardHTML(modelName, profile, isCustom) {
+    const modelId = `regression_model_${modelName}`;
+    const deleteBtn = isCustom ? `
+        <button class="btn btn-sm btn-outline-danger float-end"
+                onclick="event.stopPropagation(); deleteCustomModel('${modelName}')"
+                title="删除模型">
+            🗑️ 删除
+        </button>
+    ` : '';
+
+    // 生成任务标签
+    const supportedTasks = profile.supported_tasks || ['binary', 'multiclass', 'regression'];
+    const supportsRegression = supportedTasks.includes('regression');
+    const taskBadge = supportsRegression
+        ? `<span class="badge bg-info me-1" style="font-size: 0.7rem;">回归</span>`
+        : `<span class="badge bg-secondary me-1" style="font-size: 0.7rem;">不支持</span>`;
+
+    return `
+        <div class="model-card" id="${modelId}_card" onclick="toggleRegressionModelCard('${modelName}')">
+            <div class="model-card-header" id="${modelId}_header">
+                <div class="d-flex align-items-center w-100">
+                    <div class="me-3">
+                        <input class="form-check-input model-select-checkbox"
+                               type="checkbox"
+                               value="${modelName}"
+                               id="${modelId}_checkbox"
+                               ${!supportsRegression ? 'disabled' : ''}
+                               onclick="event.stopPropagation(); toggleRegressionModelSelection('${modelName}')">
+                    </div>
+                    <div class="flex-grow-1">
+                        <span class="fw-bold">
+                            ${modelName.toUpperCase()}
+                            ${isCustom ? ' <span class="badge bg-warning text-dark">自定义</span>' : ''}
+                        </span>
+                        <div class="mt-1">${taskBadge}</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    ${deleteBtn}
+                    <span class="collapse-button ms-2" id="${modelId}_collapseButton">
+                        ▼
+                    </span>
+                </div>
+            </div>
+            <div class="collapse" id="${modelId}_body">
+                <div class="model-card-body" onclick="event.stopPropagation()">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="param-slider">
+                                <label>Bias</label>
+                                <input type="range" class="form-control" id="${modelId}_bias"
+                                       min="0" max="1" step="0.05" value="${profile.bias}">
+                                <span class="param-value" id="${modelId}_biasValue">${profile.bias.toFixed(2)}</span>
+                            </div>
+                            <div class="param-slider">
+                                <label>Variance</label>
+                                <input type="range" class="form-control" id="${modelId}_variance"
+                                       min="0" max="1" step="0.05" value="${profile.variance}">
+                                <span class="param-value" id="${modelId}_varianceValue">${profile.variance.toFixed(2)}</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="param-slider">
+                                <label>Capacity</label>
+                                <input type="range" class="form-control" id="${modelId}_capacity"
+                                       min="0" max="1" step="0.05" value="${profile.capacity}">
+                                <span class="param-value" id="${modelId}_capacityValue">${profile.capacity.toFixed(2)}</span>
+                            </div>
+                            <div class="param-slider">
+                                <label>Noise Tol.</label>
+                                <input type="range" class="form-control" id="${modelId}_noiseTol"
+                                       min="0" max="1" step="0.05" value="${profile.noise_tolerance}">
+                                <span class="param-value" id="${modelId}_noiseTolValue">${profile.noise_tolerance.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 绑定回归任务模型卡片事件
+function bindRegressionCardEvents() {
+    // 绑定参数滑块
+    document.querySelectorAll('#regressionModelCardsContainer .param-slider input[type="range"]').forEach(slider => {
+        slider.addEventListener('input', function() {
+            const valueSpan = document.getElementById(this.id + 'Value');
+            if (valueSpan) {
+                valueSpan.textContent = parseFloat(this.value).toFixed(2);
+            }
+
+            // 更新模型profile
+            const modelId = this.id.replace(/_(bias|variance|capacity|noiseTol)$/, '');
+            const modelName = modelId.replace('regression_model_', '');
+            const param = this.id.replace(modelId + '_', '');
+
+            if (param === 'noiseTol') {
+                modelProfiles[modelName].noise_tolerance = parseFloat(this.value);
+            } else {
+                modelProfiles[modelName][param] = parseFloat(this.value);
+            }
+        });
+    });
+
+    // 监听折叠事件
+    document.getElementById('regressionModelCardsContainer').addEventListener('hidden.bs.collapse', function(e) {
+        const button = e.target.closest('.model-card')?.querySelector('.collapse-button');
+        if (button) button.textContent = '▼';
+    });
+
+    document.getElementById('regressionModelCardsContainer').addEventListener('shown.bs.collapse', function(e) {
+        const button = e.target.closest('.model-card')?.querySelector('.collapse-button');
+        if (button) button.textContent = '▲';
+    });
+}
+
+// 切换回归模型卡片展开/收起
+function toggleRegressionModelCard(modelName) {
+    const modelId = `regression_model_${modelName}`;
+    const collapse = document.getElementById(`${modelId}_body`);
+    const bsCollapse = new bootstrap.Collapse(collapse, {
+        toggle: true
+    });
+}
+
+// 切换回归模型选择状态
+function toggleRegressionModelSelection(modelName) {
+    const modelId = `regression_model_${modelName}`;
+    const card = document.getElementById(`${modelId}_card`);
+    const header = document.getElementById(`${modelId}_header`);
+    const checkbox = document.getElementById(`${modelId}_checkbox`);
+
+    if (checkbox.checked) {
+        card.classList.add('selected');
+    } else {
+        card.classList.remove('selected');
+    }
+}
 
 // 初始化模型卡片
 function initializeModelCards() {
@@ -390,12 +576,24 @@ function resetNewModelSliders() {
 
 // 绑定事件
 function bindEvents() {
-    // 难度参数滑块
+    // 分类任务难度参数滑块
     bindSlider('numSamples', 'numSamplesValue');
     bindSlider('separability', 'separabilityValue');
     bindSlider('labelNoise', 'labelNoiseValue');
     bindSlider('featureNoise', 'featureNoiseValue');
     bindSlider('nonlinearity', 'nonlinearityValue');
+
+    // 回归任务难度参数滑块
+    bindSlider('regressionNumSamples', 'regressionNumSamplesValue');
+    bindSlider('regSignalToNoise', 'regSignalToNoiseValue');
+    bindSlider('regFunctionComplexity', 'regFunctionComplexityValue');
+    bindSlider('regNoiseLevel', 'regNoiseLevelValue');
+    bindSlider('regNFeatures', 'regNFeaturesValue');
+    bindSlider('regFeatureNoise', 'regFeatureNoiseValue');
+    bindSlider('regressionLcR2_10', 'regressionLcR2_10Value');
+    bindSlider('regressionLcR2_100', 'regressionLcR2_100Value');
+    bindSlider('regressionLcAlpha', 'regressionLcAlphaValue');
+    bindSlider('regressionLcNoise', 'regressionLcNoiseValue');
 
     // 新模型参数滑块
     bindSlider('newModelBias', 'newModelBiasValue');
@@ -414,9 +612,14 @@ function bindEvents() {
         updateUIForTaskType(this.value);
     });
 
-    // 实验方案类型切换
+    // 实验方案类型切换（分类任务）
     document.getElementById('experimentType').addEventListener('change', function() {
         updateUIForExperimentType(this.value);
+    });
+
+    // 实验方案类型切换（回归任务）
+    document.getElementById('regressionExperimentType').addEventListener('change', function() {
+        updateRegressionUIForExperimentType(this.value);
     });
 
     // 展开全部
@@ -443,6 +646,44 @@ function bindEvents() {
                 btn.textContent = '▼';
             });
         }, 350);
+    });
+
+    // 回归任务 - 展开全部
+    document.getElementById('regressionExpandAllBtn').addEventListener('click', function() {
+        document.querySelectorAll('#regressionModelCardsContainer .collapse').forEach(collapse => {
+            new bootstrap.Collapse(collapse, { show: true });
+        });
+        // 更新箭头方向
+        setTimeout(() => {
+            document.querySelectorAll('#regressionModelCardsContainer .collapse-button').forEach(btn => {
+                btn.textContent = '▲';
+            });
+        }, 350);
+    });
+
+    // 回归任务 - 收起全部
+    document.getElementById('regressionCollapseAllBtn').addEventListener('click', function() {
+        document.querySelectorAll('#regressionModelCardsContainer .collapse').forEach(collapse => {
+            new bootstrap.Collapse(collapse, { hide: true });
+        });
+        // 更新箭头方向
+        setTimeout(() => {
+            document.querySelectorAll('#regressionModelCardsContainer .collapse-button').forEach(btn => {
+                btn.textContent = '▼';
+            });
+        }, 350);
+    });
+
+    // 回归任务 - 重置所有
+    document.getElementById('regressionResetAllBtn').addEventListener('click', function() {
+        if (confirm('确定要重置所有模型参数吗？')) {
+            for (const modelName of Object.keys(modelProfiles)) {
+                if (!customModels.includes(modelName)) {
+                    resetModelProfile(modelName);
+                }
+            }
+            showAlert('所有模型参数已重置', 'success');
+        }
     });
 
     // 重置所有
@@ -475,11 +716,17 @@ function bindEvents() {
         }
     });
 
-    // 运行按钮
+    // 运行按钮（分类任务）
     document.getElementById('runBtn').addEventListener('click', runSimulation);
 
-    // 导出按钮
+    // 导出按钮（分类任务）
     document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+    // 运行按钮（回归任务）
+    document.getElementById('regressionRunBtn').addEventListener('click', runSimulation);
+
+    // 导出按钮（回归任务）
+    document.getElementById('regressionExportBtn').addEventListener('click', exportCSV);
 }
 
 // 绑定滑块
@@ -530,6 +777,26 @@ function updateUIForExperimentType(experimentType) {
     const cvConfig = document.getElementById('cvConfig');
     const lcConfigSimple = document.getElementById('lcConfigSimple');
     const lcConfig = document.getElementById('lcConfig');
+
+    // 隐藏所有配置
+    cvConfig.style.display = 'none';
+    lcConfigSimple.style.display = 'none';
+    lcConfig.style.display = 'none';
+
+    // 根据类型显示对应配置
+    if (experimentType === 'cv') {
+        cvConfig.style.display = 'block';
+    } else if (experimentType === 'learning_curve') {
+        lcConfigSimple.style.display = 'block';
+        lcConfig.style.display = 'block';
+    }
+}
+
+// 根据实验方案类型更新UI（回归任务）
+function updateRegressionUIForExperimentType(experimentType) {
+    const cvConfig = document.getElementById('regressionCvConfig');
+    const lcConfigSimple = document.getElementById('regressionLcConfigSimple');
+    const lcConfig = document.getElementById('regressionLcConfig');
 
     // 隐藏所有配置
     cvConfig.style.display = 'none';
@@ -783,11 +1050,103 @@ function initCharts() {
     });
 }
 
+// 初始化回归图表
+function initRegressionCharts() {
+    // 柱状图1 (MAE)
+    const ctx1 = document.getElementById('regressionChart1').getContext('2d');
+    charts.regressionChart1 = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'MAE',
+                data: [],
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                errorBars: null
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        },
+        plugins: [{
+            id: 'errorBars',
+            afterDatasetsDraw: (chart) => drawErrorBars(chart)
+        }]
+    });
+
+    // 柱状图2 (RMSE)
+    const ctx2 = document.getElementById('regressionChart2').getContext('2d');
+    charts.regressionChart2 = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'RMSE',
+                data: [],
+                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                errorBars: null
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        },
+        plugins: [{
+            id: 'errorBars',
+            afterDatasetsDraw: (chart) => drawErrorBars(chart)
+        }]
+    });
+
+    // 雷达图
+    const radarCtx = document.getElementById('regressionRadarChart').getContext('2d');
+    charts.regressionRadar = new Chart(radarCtx, {
+        type: 'radar',
+        data: {
+            labels: ['1-MAE', '1-RMSE', 'R²'],
+            datasets: []
+        },
+        options: {
+            responsive: true,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 1
+                }
+            }
+        }
+    });
+}
+
 // 运行模拟
 async function runSimulation() {
-    const runBtn = document.getElementById('runBtn');
-    const runBtnText = document.getElementById('runBtnText');
-    const runBtnSpinner = document.getElementById('runBtnSpinner');
+    // 根据当前任务模式选择对应的按钮
+    const isRegression = currentTaskMode === 'regression';
+    const runBtnId = isRegression ? 'regressionRunBtn' : 'runBtn';
+    const runBtnTextId = isRegression ? 'regressionRunBtnText' : 'runBtnText';
+    const runBtnSpinnerId = isRegression ? 'regressionRunBtnSpinner' : 'runBtnSpinner';
+
+    const runBtn = document.getElementById(runBtnId);
+    const runBtnText = document.getElementById(runBtnTextId);
+    const runBtnSpinner = document.getElementById(runBtnSpinnerId);
 
     // 获取选中的模型
     const selectedModels = getSelectedModels();
@@ -861,87 +1220,180 @@ function getSelectedModels() {
 
 // 构建请求数据
 function buildRequestData(models) {
-    const taskType = document.getElementById('taskType').value;
-    const numSamples = parseInt(document.getElementById('numSamples').value);
+    let taskType, numSamples, nClasses, labelDistribution, difficulty, experimentConfig;
 
-    // 根据任务类型确定n_classes
-    let nClasses;
-    if (taskType === 'binary') {
-        nClasses = 2;
-    } else if (taskType === 'regression') {
-        nClasses = null;  // 回归任务不需要n_classes
+    if (currentTaskMode === 'regression') {
+        // 回归任务配置
+        taskType = 'regression';
+        numSamples = parseInt(document.getElementById('regressionNumSamples').value);
+        nClasses = null;
+        labelDistribution = null;
+
+        // 回归难度配置
+        const regDifficulty = {
+            signal_to_noise: parseFloat(document.getElementById('regSignalToNoise').value),
+            function_complexity: parseFloat(document.getElementById('regFunctionComplexity').value),
+            noise_level: parseFloat(document.getElementById('regNoiseLevel').value),
+            heteroscedastic: document.getElementById('regHeteroscedastic').checked,
+            n_features: parseInt(document.getElementById('regNFeatures').value),
+            feature_noise: parseFloat(document.getElementById('regFeatureNoise').value),
+        };
+
+        // 分类难度配置（回归任务使用默认值）
+        difficulty = {
+            separability: 0.5,
+            label_noise: 0.1,
+            feature_noise: 0.1,
+            nonlinearity: 0.5,
+            spurious_correlation: 0.3,
+        };
+
+        // 实验方案配置（回归）
+        const experimentType = document.getElementById('regressionExperimentType').value;
+        experimentConfig = { type: experimentType };
+
+        if (experimentType === 'cv') {
+            experimentConfig.n_folds = parseInt(document.getElementById('regressionNFolds').value);
+        } else if (experimentType === 'learning_curve') {
+            const trainSizesStr = document.getElementById('regressionTrainSizes').value.trim();
+            experimentConfig.train_sizes = trainSizesStr.split(',').map(s => parseFloat(s.trim()));
+            experimentConfig.n_runs = parseInt(document.getElementById('regressionLcRuns').value);
+
+            // 学习曲线参数（回归使用R²）
+            experimentConfig.lc_params = {
+                acc_10: parseFloat(document.getElementById('regressionLcR2_10').value),
+                acc_100: parseFloat(document.getElementById('regressionLcR2_100').value),
+                alpha: parseFloat(document.getElementById('regressionLcAlpha').value),
+                noise_std_start: parseFloat(document.getElementById('regressionLcNoise').value),
+            };
+        }
+
+        return {
+            task_type: taskType,
+            num_samples: numSamples,
+            n_classes: nClasses,
+            label_distribution: labelDistribution,
+            models: models,
+            difficulty: difficulty,
+            regression_difficulty: regDifficulty,  // 回归专用配置
+            models_config: buildModelsConfig(models, 'regression'),
+            experiment_config: experimentConfig,
+            random_state: 42,
+        };
     } else {
-        // 多分类
-        nClasses = parseInt(document.getElementById('nClasses').value);
-    }
+        // 分类任务配置（原有逻辑）
+        taskType = document.getElementById('taskType').value;
+        numSamples = parseInt(document.getElementById('numSamples').value);
 
-    const labelDistStr = document.getElementById('labelDistribution').value.trim();
+        // 根据任务类型确定n_classes
+        if (taskType === 'binary') {
+            nClasses = 2;
+        } else if (taskType === 'multiclass') {
+            nClasses = parseInt(document.getElementById('nClasses').value);
+        } else {
+            nClasses = null;
+        }
 
-    let labelDistribution = null;
-    if (labelDistStr) {
-        labelDistribution = labelDistStr.split(',').map(s => parseFloat(s.trim()));
-    }
+        const labelDistStr = document.getElementById('labelDistribution').value.trim();
+        if (labelDistStr) {
+            labelDistribution = labelDistStr.split(',').map(s => parseFloat(s.trim()));
+        } else {
+            labelDistribution = null;
+        }
 
-    const difficulty = {
-        separability: parseFloat(document.getElementById('separability').value),
-        label_noise: parseFloat(document.getElementById('labelNoise').value),
-        feature_noise: parseFloat(document.getElementById('featureNoise').value),
-        nonlinearity: parseFloat(document.getElementById('nonlinearity').value),
-        spurious_correlation: 0.3,
-    };
+        difficulty = {
+            separability: parseFloat(document.getElementById('separability').value),
+            label_noise: parseFloat(document.getElementById('labelNoise').value),
+            feature_noise: parseFloat(document.getElementById('featureNoise').value),
+            nonlinearity: parseFloat(document.getElementById('nonlinearity').value),
+            spurious_correlation: 0.3,
+        };
 
-    // 构建每个模型的独立能力画像
-    const models_config = {};
-    models.forEach(modelName => {
-        models_config[modelName] = modelProfiles[modelName];
-    });
+        // 构建实验方案配置
+        const experimentType = document.getElementById('experimentType').value;
+        experimentConfig = { type: experimentType };
 
-    // 构建实验方案配置
-    const experimentType = document.getElementById('experimentType').value;
-    let experimentConfig = {
-        type: experimentType,
-    };
+        if (experimentType === 'cv') {
+            experimentConfig.n_folds = parseInt(document.getElementById('nFolds').value);
+        } else if (experimentType === 'learning_curve') {
+            const trainSizesStr = document.getElementById('trainSizes').value.trim();
+            experimentConfig.train_sizes = trainSizesStr.split(',').map(s => parseFloat(s.trim()));
+            experimentConfig.n_runs = parseInt(document.getElementById('lcRuns').value);
 
-    if (experimentType === 'cv') {
-        experimentConfig.n_folds = parseInt(document.getElementById('nFolds').value);
-    } else if (experimentType === 'learning_curve') {
-        const trainSizesStr = document.getElementById('trainSizes').value.trim();
-        experimentConfig.train_sizes = trainSizesStr.split(',').map(s => parseFloat(s.trim()));
-        experimentConfig.n_runs = parseInt(document.getElementById('lcRuns').value);
+            // 学习曲线参数
+            experimentConfig.lc_params = {
+                acc_10: parseFloat(document.getElementById('lcAcc10').value),
+                acc_100: parseFloat(document.getElementById('lcAcc100').value),
+                alpha: parseFloat(document.getElementById('lcAlpha').value),
+                noise_std_start: parseFloat(document.getElementById('lcNoise').value),
+            };
+        }
 
-        // 学习曲线参数
-        experimentConfig.lc_params = {
-            acc_10: parseFloat(document.getElementById('lcAcc10').value),
-            acc_100: parseFloat(document.getElementById('lcAcc100').value),
-            alpha: parseFloat(document.getElementById('lcAlpha').value),
-            noise_std_start: parseFloat(document.getElementById('lcNoise').value),
+        return {
+            task_type: taskType,
+            num_samples: numSamples,
+            n_classes: nClasses,
+            label_distribution: labelDistribution,
+            models: models,
+            difficulty: difficulty,
+            models_config: buildModelsConfig(models, 'classification'),
+            experiment_config: experimentConfig,
+            random_state: 42,
         };
     }
+}
 
-    return {
-        task_type: taskType,
-        num_samples: numSamples,
-        n_classes: nClasses,
-        label_distribution: labelDistribution,
-        models: models,
-        difficulty: difficulty,
-        models_config: models_config,
-        experiment_config: experimentConfig,
-        random_state: 42,
-    };
+// 构建模型配置
+function buildModelsConfig(models, taskMode) {
+    const models_config = {};
+
+    models.forEach(modelName => {
+        // 从当前活跃的模型卡片容器中获取配置
+        let profile;
+        if (taskMode === 'regression') {
+            // 从回归模型卡片中获取
+            const modelId = `regression_model_${modelName}`;
+            const bias = parseFloat(document.getElementById(`${modelId}_bias`).value);
+            const variance = parseFloat(document.getElementById(`${modelId}_variance`).value);
+            const capacity = parseFloat(document.getElementById(`${modelId}_capacity`).value);
+            const noiseTol = parseFloat(document.getElementById(`${modelId}_noiseTol`).value);
+
+            profile = {
+                bias: bias,
+                variance: variance,
+                capacity: capacity,
+                noise_tolerance: noiseTol
+            };
+
+            // 同时更新全局modelProfiles
+            modelProfiles[modelName] = profile;
+        } else {
+            // 从分类模型卡片中获取（使用已有的profile）
+            profile = modelProfiles[modelName];
+        }
+
+        models_config[modelName] = profile;
+    });
+
+    return models_config;
 }
 
 // 显示结果
 function displayResults(results, experimentType) {
-    updateTable(results, experimentType);
-    updateCharts(results, experimentType);
+    const isRegression = currentTaskMode === 'regression';
+    updateTable(results, experimentType, isRegression);
+    updateCharts(results, experimentType, isRegression);
 }
 
 // 更新表格
-function updateTable(results, experimentType) {
-    const taskType = document.getElementById('taskType').value;
-    const thead = document.querySelector('#resultsTableHead tr');
-    const tbody = document.querySelector('#resultsTable tbody');
+function updateTable(results, experimentType, isRegression = false) {
+    // 根据任务类型选择对应的表格元素
+    const tableId = isRegression ? 'regressionResultsTable' : 'resultsTable';
+    const theadId = isRegression ? 'regressionResultsTableHead' : 'resultsTableHead';
+
+    const taskType = isRegression ? 'regression' : document.getElementById('taskType').value;
+    const thead = document.querySelector(`#${theadId} tr`);
+    const tbody = document.querySelector(`#${tableId} tbody`);
 
     // 清空表格
     thead.innerHTML = '';
@@ -1048,8 +1500,8 @@ function addCell(row, text) {
 }
 
 // 更新图表
-function updateCharts(results, experimentType) {
-    const taskType = document.getElementById('taskType').value;
+function updateCharts(results, experimentType, isRegression = false) {
+    const taskType = isRegression ? 'regression' : document.getElementById('taskType').value;
     const isStatistical = experimentType === 'cv' || experimentType === 'learning_curve';
 
     const colors = [
@@ -1062,10 +1514,18 @@ function updateCharts(results, experimentType) {
 
     // 学习曲线使用折线图，其他使用柱状图
     if (experimentType === 'learning_curve') {
-        updateLearningCurveCharts(results, taskType, colors);
+        if (isRegression) {
+            updateRegressionLearningCurveCharts(results, colors);
+        } else {
+            updateLearningCurveCharts(results, taskType, colors);
+        }
     } else {
         // 单次运行或交叉验证使用柱状图
-        updateBarCharts(results, taskType, isStatistical, colors);
+        if (isRegression) {
+            updateRegressionBarCharts(results, isStatistical, colors);
+        } else {
+            updateBarCharts(results, taskType, isStatistical, colors);
+        }
     }
 }
 
@@ -1264,6 +1724,118 @@ function updateLearningCurveCharts(results, taskType, colors) {
     charts.radar.data.labels = [];
     charts.radar.data.datasets = [];
     charts.radar.update();
+}
+
+// 更新回归柱状图（单次运行和交叉验证）
+function updateRegressionBarCharts(results, isStatistical, colors) {
+    const models = results.map(r => r.model.toUpperCase());
+
+    // 获取指标值（均值）和误差（标准差）
+    const getValue = (row, metric) => {
+        if (isStatistical) {
+            return row[metric + '_mean'];
+        }
+        return row[metric];
+    };
+
+    const getError = (row, metric) => {
+        if (isStatistical) {
+            return row[metric + '_std'];
+        }
+        return 0;
+    };
+
+    document.getElementById('regressionChart1Title').textContent = 'MAE 对比';
+    document.getElementById('regressionChart2Title').textContent = 'RMSE 对比';
+
+    // Chart 1: MAE
+    charts.regressionChart1.data.labels = models;
+    charts.regressionChart1.data.datasets[0].label = 'MAE';
+    charts.regressionChart1.data.datasets[0].data = results.map(r => getValue(r, 'mae'));
+    charts.regressionChart1.data.datasets[0].backgroundColor = colors[0];
+    charts.regressionChart1.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'mae')) : null;
+    charts.regressionChart1.update();
+
+    // Chart 2: RMSE
+    charts.regressionChart2.data.labels = models;
+    charts.regressionChart2.data.datasets[0].label = 'RMSE';
+    charts.regressionChart2.data.datasets[0].data = results.map(r => getValue(r, 'rmse'));
+    charts.regressionChart2.data.datasets[0].backgroundColor = colors[1];
+    charts.regressionChart2.data.datasets[0].errorBars = isStatistical ? results.map(r => getError(r, 'rmse')) : null;
+    charts.regressionChart2.update();
+
+    // Radar chart
+    charts.regressionRadar.data.labels = ['1-MAE', '1-RMSE', 'R²'];
+    charts.regressionRadar.data.datasets = results.map((r, i) => ({
+        label: r.model.toUpperCase(),
+        data: [1 - getValue(r, 'mae'), 1 - getValue(r, 'rmse'), getValue(r, 'r2')],
+        backgroundColor: colors[i % colors.length],
+    }));
+    charts.regressionRadar.update();
+}
+
+// 更新回归学习曲线图表
+function updateRegressionLearningCurveCharts(results, colors) {
+    // 按模型分组
+    const modelGroups = {};
+    results.forEach(r => {
+        if (!modelGroups[r.model]) {
+            modelGroups[r.model] = [];
+        }
+        modelGroups[r.model].push(r);
+    });
+
+    // 获取训练集大小
+    const trainSizes = [...new Set(results.map(r => r.train_size))].sort((a, b) => a - b);
+    const labels = trainSizes.map(s => (s * 100).toFixed(0) + '%');
+
+    // 使用MAE和RMSE作为主要指标
+    const metric1 = 'mae_mean';
+    const metric2 = 'rmse_mean';
+
+    document.getElementById('regressionChart1Title').textContent = 'MAE 学习曲线';
+    document.getElementById('regressionChart2Title').textContent = 'RMSE 学习曲线';
+
+    // 创建数据集
+    const datasets1 = Object.keys(modelGroups).map((model, i) => ({
+        label: model.toUpperCase(),
+        data: trainSizes.map(size => {
+            const row = modelGroups[model].find(r => r.train_size === size);
+            return row ? row[metric1] : null;
+        }),
+        borderColor: colors[i % colors.length].replace('0.6', '1'),
+        backgroundColor: colors[i % colors.length],
+        tension: 0.3,
+        fill: false,
+    }));
+
+    const datasets2 = Object.keys(modelGroups).map((model, i) => ({
+        label: model.toUpperCase(),
+        data: trainSizes.map(size => {
+            const row = modelGroups[model].find(r => r.train_size === size);
+            return row ? row[metric2] : null;
+        }),
+        borderColor: colors[i % colors.length].replace('0.6', '1'),
+        backgroundColor: colors[i % colors.length],
+        tension: 0.3,
+        fill: false,
+    }));
+
+    // 更新图表类型为折线图
+    charts.regressionChart1.config.type = 'line';
+    charts.regressionChart1.data.labels = labels;
+    charts.regressionChart1.data.datasets = datasets1;
+    charts.regressionChart1.update();
+
+    charts.regressionChart2.config.type = 'line';
+    charts.regressionChart2.data.labels = labels;
+    charts.regressionChart2.data.datasets = datasets2;
+    charts.regressionChart2.update();
+
+    // 雷达图不适用于学习曲线
+    charts.regressionRadar.data.labels = [];
+    charts.regressionRadar.data.datasets = [];
+    charts.regressionRadar.update();
 }
 
 // 导出CSV

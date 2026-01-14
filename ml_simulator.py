@@ -13,6 +13,9 @@ from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
+# 导入回归任务专用模块
+from regression_config import RegressionDifficulty, generate_regression_data, compute_regression_metrics
+
 
 # =============================================================================
 # 1. 任务类型定义
@@ -46,14 +49,6 @@ class DifficultyConfig:
     feature_noise: float = 0.2         # 特征噪声 [0-1]
     nonlinearity: float = 0.7          # 非线性强度 [0-1]
     spurious_correlation: float = 0.3  # 伪相关性 [0-1]
-
-
-@dataclass
-class RegressionConfig:
-    """回归任务专用配置"""
-    function_complexity: float = 0.8
-    noise_level: float = 0.2
-    heteroscedastic: bool = True       # 异方差性
 
 
 @dataclass
@@ -266,34 +261,43 @@ def generate_classification_predictions(
 
 
 # =============================================================================
-# 6. 回归预测生成器
+# 6. 回归预测生成器（重构版）
 # =============================================================================
 
 def generate_regression_predictions(
+    X: np.ndarray,
     y_true: np.ndarray,
-    difficulty: DifficultyConfig,
+    reg_difficulty: RegressionDifficulty,
     model_profile: ModelProfile,
     task_config: TaskConfig,
-    reg_config: RegressionConfig,
 ) -> np.ndarray:
     """
-    生成回归预测值
+    生成回归预测值（基于特征 X）
 
-    核心公式：
-        ŷ = f_model(x) + ε_noise
+    核心思想：
+        模型试图从 X 学习 y = f(X) + noise 的映射关系
+        模型的预测能力取决于：
+        1. capacity: 能多好地逼近 f(X)
+        2. bias: 系统性偏差（欠拟合）
+        3. variance: 预测不稳定性（过拟合）
+        4. noise_tolerance: 对噪声的抗干扰能力
 
     Parameters
     ----------
+    X : np.ndarray
+        特征矩阵 (n_samples, n_features)
+
     y_true : np.ndarray
-        真实值
-    difficulty : DifficultyConfig
-        难度配置
+        真实目标值（已标准化）
+
+    reg_difficulty : RegressionDifficulty
+        回归难度配置
+
     model_profile : ModelProfile
         模型能力画像
+
     task_config : TaskConfig
         任务配置
-    reg_config : RegressionConfig
-        回归专用配置
 
     Returns
     -------
@@ -301,27 +305,53 @@ def generate_regression_predictions(
         预测值
     """
     rng = np.random.default_rng(task_config.random_state)
+    n_samples = X.shape[0]
 
-    # 模型对真实函数的逼近能力
-    approximation_quality = model_profile.capacity * (1 - reg_config.function_complexity * 0.5)
+    # 1. 模型学到的信号部分
+    # capacity 越高，对 f(X) 的逼近越好
+    # function_complexity 越高，越难学习
 
-    # 基础预测：模型学到的部分
-    signal = y_true * approximation_quality
+    # 计算学习质量：考虑模型能力和函数复杂度
+    learning_quality = model_profile.capacity * (1 - reg_difficulty.function_complexity * 0.4)
 
-    # 添加噪声
-    if reg_config.heteroscedastic:
-        # 异方差：噪声随|y_true|增大
-        noise_std = reg_config.noise_level * (1 + 0.5 * np.abs(y_true))
-    else:
-        # 同方差
-        noise_std = reg_config.noise_level
+    # 简化模拟：模型学到的部分 = y_true * 学习质量 + 基于特征的近似
+    learned_signal = y_true * learning_quality
 
-    noise = rng.normal(0, noise_std, size=len(y_true))
+    # 添加特征的影响（模型从 X 中学到的模式）
+    # 用简单的线性组合模拟模型对特征的学习
+    feature_importance = rng.standard_normal(X.shape[1])
+    feature_contribution = X @ feature_importance
+    # 标准化特征贡献
+    feature_contribution = (feature_contribution - feature_contribution.mean()) / (feature_contribution.std() + 1e-12)
+    # 按模型能力加权
+    learned_signal += feature_contribution * model_profile.capacity * 0.3
 
-    # 模型方差导致的不稳定性
-    model_noise = rng.normal(0, model_profile.variance * 0.5, size=len(y_true))
+    # 2. 模型偏差（系统性偏离）
+    # bias 越高，预测值越偏离真实值
+    bias_shift = rng.normal(0, model_profile.bias * 0.5, n_samples)
+    learned_signal += bias_shift
 
-    y_pred = signal + noise + model_noise
+    # 3. 模型方差（预测不稳定性）
+    # variance 越高，预测越不稳定
+    prediction_noise = rng.normal(0, model_profile.variance * 0.5, n_samples)
+
+    # 4. 噪声容忍度
+    # noise_tolerance 越高，模型对数据噪声的抗干扰能力越强
+    # 模拟方式：降低噪声对预测的影响
+    if model_profile.noise_tolerance > 0.5:
+        # 高容忍度：模型学到了去噪能力
+        denoising_factor = (model_profile.noise_tolerance - 0.5) * 2  # 0 到 1
+        # 通过平滑来降低噪声影响
+        prediction_noise *= (1 - denoising_factor * 0.5)
+
+    # 5. 组合最终预测
+    y_pred = learned_signal + prediction_noise
+
+    # 6. 模拟欠拟合（高 bias）
+    # 高 bias 模型会收缩预测值到均值
+    if model_profile.bias > 0.6:
+        shrinkage = (model_profile.bias - 0.6) * 2  # 0 到 0.8
+        y_pred = y_pred * (1 - shrinkage) + np.mean(y_true) * shrinkage
 
     return y_pred
 
@@ -487,24 +517,6 @@ def _multiclass_auc_ovr_macro(y_true: np.ndarray, y_prob: np.ndarray, n_classes:
     return float(np.mean(aucs))
 
 
-def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    """计算回归指标"""
-    residuals = y_true - y_pred
-
-    rmse = float(np.sqrt(np.mean(residuals ** 2)))
-    mae = float(np.mean(np.abs(residuals)))
-
-    ss_res = np.sum(residuals ** 2)
-    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    r2 = float(1 - ss_res / (ss_tot + 1e-12))
-
-    return {
-        "rmse": rmse,
-        "mae": mae,
-        "r2": r2,
-    }
-
-
 def compute_classification_metrics(
     y_true: np.ndarray,
     y_prob: np.ndarray,
@@ -601,7 +613,7 @@ class MLSimulator:
         task_config: TaskConfig,
         difficulty: DifficultyConfig,
         model_profile: Union[str, ModelProfile],
-        reg_config: Optional[RegressionConfig] = None,
+        reg_difficulty: Optional[RegressionDifficulty] = None,
     ):
         """
         Parameters
@@ -609,11 +621,11 @@ class MLSimulator:
         task_config : TaskConfig
             任务配置
         difficulty : DifficultyConfig
-            难度配置
+            分类任务难度配置
         model_profile : str or ModelProfile
             模型名称（预定义）或自定义模型画像
-        reg_config : RegressionConfig, optional
-            回归任务专用配置
+        reg_difficulty : RegressionDifficulty, optional
+            回归任务专用难度配置
         """
         self.task_config = task_config
         self.difficulty = difficulty
@@ -625,10 +637,20 @@ class MLSimulator:
         else:
             self.model_profile = model_profile
 
-        self.reg_config = reg_config or RegressionConfig()
+        self.reg_difficulty = reg_difficulty or RegressionDifficulty()
 
-        # 生成标签
-        self.y_true = generate_labels(task_config)
+        # 根据任务类型生成数据
+        if task_config.task_type == TaskType.REGRESSION:
+            # 回归任务：生成特征 X 和目标值 y
+            self.X, self.y_true = generate_regression_data(
+                num_samples=task_config.num_samples,
+                difficulty=self.reg_difficulty,
+                random_state=task_config.random_state
+            )
+        else:
+            # 分类任务：只生成标签 y
+            self.y_true = generate_labels(task_config)
+            self.X = None
 
     def simulate(self) -> Dict[str, float]:
         """
@@ -641,11 +663,11 @@ class MLSimulator:
         """
         if self.task_config.task_type == TaskType.REGRESSION:
             y_pred = generate_regression_predictions(
+                self.X,
                 self.y_true,
-                self.difficulty,
+                self.reg_difficulty,
                 self.model_profile,
                 self.task_config,
-                self.reg_config,
             )
             metrics = compute_regression_metrics(self.y_true, y_pred)
         else:
@@ -674,11 +696,11 @@ class MLSimulator:
         """
         if self.task_config.task_type == TaskType.REGRESSION:
             return generate_regression_predictions(
+                self.X,
                 self.y_true,
-                self.difficulty,
+                self.reg_difficulty,
                 self.model_profile,
                 self.task_config,
-                self.reg_config,
             )
         else:
             return generate_classification_predictions(
@@ -797,7 +819,7 @@ def compare_models(
     task_config: TaskConfig,
     difficulty: DifficultyConfig,
     model_names: List[str],
-    reg_config: Optional[RegressionConfig] = None,
+    reg_difficulty: Optional[RegressionDifficulty] = None,
     custom_profiles: Optional[Dict[str, ModelProfile]] = None,
 ) -> pd.DataFrame:
     """
@@ -808,11 +830,11 @@ def compare_models(
     task_config : TaskConfig
         任务配置
     difficulty : DifficultyConfig
-        难度配置
+        分类任务难度配置
     model_names : List[str]
         模型名称列表
-    reg_config : RegressionConfig, optional
-        回归配置
+    reg_difficulty : RegressionDifficulty, optional
+        回归任务专用难度配置
     custom_profiles : Dict[str, ModelProfile], optional
         自定义模型画像 {model_name: ModelProfile}
         如果提供，将覆盖预定义画像
@@ -835,7 +857,7 @@ def compare_models(
             task_config=task_config,
             difficulty=difficulty,
             model_profile=profile,
-            reg_config=reg_config,
+            reg_difficulty=reg_difficulty,
         )
         metrics = simulator.simulate()
         metrics["model"] = model_name

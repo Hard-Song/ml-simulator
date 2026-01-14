@@ -13,7 +13,6 @@ import json
 from ml_simulator import (
     TaskConfig,
     DifficultyConfig,
-    RegressionConfig,
     MLSimulator,
     simulate_learning_curve,
     compare_models,
@@ -21,6 +20,7 @@ from ml_simulator import (
     TaskType,
     PREDEFINED_MODEL_PROFILES,
 )
+from regression_config import RegressionDifficulty
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
@@ -162,6 +162,19 @@ def simulate():
             spurious_correlation=float(difficulty_data.get('spurious_correlation', 0.3)),
         )
 
+        # 创建回归难度配置（如果需要）
+        reg_difficulty = None
+        if task_type == TaskType.REGRESSION:
+            reg_data = data.get('regression_difficulty', {})
+            reg_difficulty = RegressionDifficulty(
+                signal_to_noise=float(reg_data.get('signal_to_noise', 1.0)),
+                function_complexity=float(reg_data.get('function_complexity', 0.5)),
+                noise_level=float(reg_data.get('noise_level', 0.2)),
+                heteroscedastic=bool(reg_data.get('heteroscedastic', True)),
+                n_features=int(reg_data.get('n_features', 10)),
+                feature_noise=float(reg_data.get('feature_noise', 0.05)),
+            )
+
         # 获取模型列表
         model_names = data.get('models', ['lgbm'])
 
@@ -213,6 +226,7 @@ def simulate():
                     task_config=fold_task_config,
                     difficulty=difficulty,
                     model_names=model_names,
+                    reg_difficulty=reg_difficulty,
                     custom_profiles=model_profiles if model_profiles else None,
                 )
                 fold_results['fold'] = fold
@@ -367,6 +381,7 @@ def simulate():
                 task_config=task_config,
                 difficulty=difficulty,
                 model_names=model_names,
+                reg_difficulty=reg_difficulty,
                 custom_profiles=model_profiles if model_profiles else None,
             )
 
@@ -769,6 +784,7 @@ def export_csv():
                     task_config=fold_task_config,
                     difficulty=difficulty,
                     model_names=model_names,
+                    reg_difficulty=reg_difficulty,
                     custom_profiles=model_profiles if model_profiles else None,
                 )
                 fold_results['fold'] = fold

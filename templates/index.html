@@ -138,52 +138,69 @@
         </div>
     </nav>
 
-    <!-- Toast通知容器 -->
-    <div id="toast-container"></div>
-
+    <!-- 任务类型 Tab 切换 -->
     <div class="container-fluid mt-3">
-        <!-- 第一行：实验设计 + 数据集特性 -->
-        <div class="row mb-3">
-            <!-- 左列：实验设计（合并实验方案 + 任务配置） -->
-            <div class="col-lg-7 col-md-7 mb-3">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <h5 class="mb-0">⚙️ 实验设计</h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- 任务基本配置 -->
-                        <h6 class="mb-2 text-primary">基本配置</h6>
-                        <div class="row mb-3">
-                            <div class="col-md-6 mb-2">
-                                <label class="form-label fw-bold">任务类型</label>
-                                <select class="form-select" id="taskType">
-                                    <option value="binary">二分类</option>
-                                    <option value="multiclass">多分类</option>
-                                    <option value="regression">回归</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-2">
-                                <label class="form-label fw-bold">样本量</label>
-                                <input type="range" class="form-range" id="numSamples" min="1000" max="20000" step="1000" value="5000">
-                                <div class="text-center">
-                                    <span class="badge bg-primary" id="numSamplesValue">5000</span>
+        <ul class="nav nav-tabs mb-3" id="taskTypeTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="classification-tab" data-bs-toggle="tab" data-bs-target="#classification-panel" type="button" role="tab" onclick="switchTaskMode('classification')">
+                    📊 分类任务
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="regression-tab" data-bs-toggle="tab" data-bs-target="#regression-panel" type="button" role="tab" onclick="switchTaskMode('regression')">
+                    📈 回归任务
+                </button>
+            </li>
+        </ul>
+
+        <!-- Toast通知容器 -->
+        <div id="toast-container"></div>
+
+        <!-- 分类任务面板 -->
+        <div class="tab-content" id="taskTypeContent">
+            <div class="tab-pane fade show active" id="classification-panel" role="tabpanel">
+                <div class="container-fluid">
+                    <!-- 第一行：实验设计 + 数据集特性 -->
+                    <div class="row mb-3">
+                        <!-- 左列：实验设计（合并实验方案 + 任务配置） -->
+                        <div class="col-lg-7 col-md-7 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">⚙️ 实验设计</h5>
                                 </div>
-                            </div>
-                        </div>
+                                <div class="card-body">
+                                    <!-- 任务基本配置 -->
+                                    <h6 class="mb-2 text-primary">基本配置</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">分类类型</label>
+                                            <select class="form-select" id="taskType">
+                                                <option value="binary">二分类</option>
+                                                <option value="multiclass">多分类</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">样本量</label>
+                                            <input type="range" class="form-range" id="numSamples" min="1000" max="20000" step="1000" value="5000">
+                                            <div class="text-center">
+                                                <span class="badge bg-primary" id="numSamplesValue">5000</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-6 mb-2" id="nClassesGroup">
-                                <label class="form-label fw-bold">类别数</label>
-                                <input type="number" class="form-control" id="nClasses" min="2" max="10" value="3">
-                            </div>
-                            <div class="col-md-6 mb-2" id="labelDistGroup">
-                                <label class="form-label fw-bold">类别分布</label>
-                                <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
-                                <small class="form-text text-muted">留空=均衡</small>
-                            </div>
-                        </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-2" id="nClassesGroup">
+                                            <label class="form-label fw-bold">类别数</label>
+                                            <input type="number" class="form-control" id="nClasses" min="2" max="10" value="3">
+                                        </div>
+                                        <div class="col-md-6 mb-2" id="labelDistGroup">
+                                            <label class="form-label fw-bold">类别分布</label>
+                                            <input type="text" class="form-control" id="labelDistribution" placeholder="0.5, 0.5">
+                                            <small class="form-text text-muted">留空=均衡</small>
+                                        </div>
+                                    </div>
 
-                        <hr>
+                                    <hr>
 
                         <!-- 实验方案 -->
                         <h6 class="mb-2 text-primary">实验方案</h6>
@@ -452,6 +469,321 @@
 
         <!-- 提示信息（已废弃，使用Toast通知系统） -->
         <div id="alertBox" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- 回归任务面板 -->
+            <div class="tab-pane fade" id="regression-panel" role="tabpanel">
+                <div class="container-fluid">
+                    <!-- 第一行：实验设计 + 数据集特性 -->
+                    <div class="row mb-3">
+                        <!-- 左列：回归实验设计 -->
+                        <div class="col-lg-7 col-md-7 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">⚙️ 回归实验设计</h5>
+                                </div>
+                                <div class="card-body">
+                                    <!-- 基本配置 -->
+                                    <h6 class="mb-2 text-primary">基本配置</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">样本量</label>
+                                            <input type="range" class="form-range" id="regressionNumSamples" min="1000" max="20000" step="1000" value="5000">
+                                            <div class="text-center">
+                                                <span class="badge bg-primary" id="regressionNumSamplesValue">5000</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <hr>
+
+                                    <!-- 实验方案 -->
+                                    <h6 class="mb-2 text-primary">实验方案</h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-bold">方案类型</label>
+                                            <select class="form-select" id="regressionExperimentType">
+                                                <option value="single">单次运行</option>
+                                                <option value="cv">交叉验证</option>
+                                                <option value="learning_curve">学习曲线</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- 交叉验证配置 -->
+                                        <div class="col-md-6 mb-2" id="regressionCvConfig" style="display: none;">
+                                            <label class="form-label">折数</label>
+                                            <select class="form-select" id="regressionNFolds">
+                                                <option value="3">3折</option>
+                                                <option value="5" selected>5折</option>
+                                                <option value="10">10折</option>
+                                            </select>
+                                            <small class="form-text text-muted">运行N次，使用不同的随机种子</small>
+                                        </div>
+
+                                        <!-- 学习曲线配置 -->
+                                        <div class="col-md-6 mb-2" id="regressionLcConfigSimple" style="display: none;">
+                                            <label class="form-label">训练集比例</label>
+                                            <input type="text" class="form-control" id="regressionTrainSizes" value="0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0">
+                                            <small class="form-text text-muted">逗号分隔</small>
+                                        </div>
+                                    </div>
+
+                                    <!-- 学习曲线详细参数 -->
+                                    <div id="regressionLcConfig" style="display: none;">
+                                        <div class="row mt-2">
+                                            <div class="col-md-6 mb-2">
+                                                <label class="form-label">每个点重复次数</label>
+                                                <select class="form-select" id="regressionLcRuns">
+                                                    <option value="1">1次</option>
+                                                    <option value="3" selected>3次</option>
+                                                    <option value="5">5次</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+                                        <h6 class="mb-2">学习曲线参数</h6>
+
+                                        <div class="row">
+                                            <div class="col-md-3 mb-2">
+                                                <label class="form-label">10%R²</label>
+                                                <input type="range" class="form-range" id="regressionLcR2_10"
+                                                       min="0.1" max="0.6" step="0.05" value="0.3">
+                                                <div class="text-end">
+                                                    <span class="badge bg-primary" id="regressionLcR2_10Value">0.3</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-2">
+                                                <label class="form-label">100%R²</label>
+                                                <input type="range" class="form-range" id="regressionLcR2_100"
+                                                       min="0.5" max="0.95" step="0.05" value="0.8">
+                                                <div class="text-end">
+                                                    <span class="badge bg-primary" id="regressionLcR2_100Value">0.8</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-2">
+                                                <label class="form-label">学习速度 (α)</label>
+                                                <input type="range" class="form-range" id="regressionLcAlpha"
+                                                       min="1.0" max="5.0" step="0.5" value="2.5">
+                                                <div class="text-end">
+                                                    <span class="badge bg-primary" id="regressionLcAlphaValue">2.5</span>
+                                                </div>
+                                                <small class="form-text text-muted">越大曲线越陡</small>
+                                            </div>
+                                            <div class="col-md-3 mb-2">
+                                                <label class="form-label">噪声强度</label>
+                                                <input type="range" class="form-range" id="regressionLcNoise"
+                                                       min="0.01" max="0.05" step="0.01" value="0.02">
+                                                <div class="text-end">
+                                                    <span class="badge bg-primary" id="regressionLcNoiseValue">0.02</span>
+                                                </div>
+                                                <small class="form-text text-muted">小数据波动</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-info mt-2 mb-0" role="alert">
+                                        <small>
+                                            💡 <strong>提示：</strong> 回归任务使用R²、RMSE等指标评估模型性能。学习曲线模式下可自定义性能参数。
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右列：回归数据集特性 -->
+                        <div class="col-lg-5 col-md-5 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">📊 回归数据集特性</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">信噪比</label>
+                                        <input type="range" class="form-range" id="regSignalToNoise" min="0.1" max="2.0" step="0.1" value="1.0">
+                                        <div class="d-flex justify-content-between">
+                                            <small>低</small>
+                                            <span class="param-value" id="regSignalToNoiseValue">1.0</span>
+                                            <small>高</small>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">函数复杂度</label>
+                                        <input type="range" class="form-range" id="regFunctionComplexity" min="0" max="1" step="0.1" value="0.5">
+                                        <div class="d-flex justify-content-between">
+                                            <small>线性</small>
+                                            <span class="param-value" id="regFunctionComplexityValue">0.5</span>
+                                            <small>高度非线性</small>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">噪声水平</label>
+                                        <input type="range" class="form-range" id="regNoiseLevel" min="0" max="1" step="0.05" value="0.2">
+                                        <div class="d-flex justify-content-between">
+                                            <small>低</small>
+                                            <span class="param-value" id="regNoiseLevelValue">0.2</span>
+                                            <small>高</small>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="regHeteroscedastic" checked>
+                                            <label class="form-check-label" for="regHeteroscedastic">
+                                                异方差性（噪声随|y|增大）
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">特征数量</label>
+                                        <input type="range" class="form-range" id="regNFeatures" min="2" max="20" step="1" value="10">
+                                        <div class="text-center">
+                                            <span class="badge bg-primary" id="regNFeaturesValue">10</span>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">特征噪声</label>
+                                        <input type="range" class="form-range" id="regFeatureNoise" min="0" max="0.5" step="0.01" value="0.05">
+                                        <div class="d-flex justify-content-between">
+                                            <small>无</small>
+                                            <span class="param-value" id="regFeatureNoiseValue">0.05</span>
+                                            <small>高</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二行：模型能力配置 -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">🤖 模型能力配置</h5>
+                                        <div>
+                                            <button class="btn btn-sm btn-light" id="regressionExpandAllBtn">展开全部</button>
+                                            <button class="btn btn-sm btn-light" id="regressionCollapseAllBtn">收起全部</button>
+                                            <button class="btn btn-sm btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#addModelModal">
+                                                ➕ 添加自定义模型
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                                        <small class="text-white">批量操作：</small>
+                                        <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('regression')">回归模型</button>
+                                        <button class="btn btn-sm btn-outline-light" onclick="selectAllModels()">全选</button>
+                                        <button class="btn btn-sm btn-outline-light" onclick="deselectAllModels()">全不选</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-12">
+                                            <small class="text-muted">
+                                                💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <!-- 模型卡片容器 -->
+                                    <div id="regressionModelCardsContainer" class="row">
+                                        <!-- 动态生成模型卡片 -->
+                                    </div>
+
+                                    <!-- 全局控制按钮 -->
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3 pt-3 border-top">
+                                        <button class="btn btn-outline-secondary" id="regressionResetAllBtn">
+                                            🔄 重置所有参数
+                                        </button>
+                                        <button class="btn btn-success" id="regressionRunBtn">
+                                            <span id="regressionRunBtnText">▶ 运行模拟</span>
+                                            <span id="regressionRunBtnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                        </button>
+                                        <button class="btn btn-primary" id="regressionExportBtn">
+                                            📥 导出 CSV
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第三行：对比结果 -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">📈 对比结果</h5>
+                                </div>
+                                <div class="card-body">
+                                    <!-- 结果表格 -->
+                                    <div class="mb-4">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover table-bordered" id="regressionResultsTable">
+                                                <thead class="table-dark" id="regressionResultsTableHead">
+                                                    <tr>
+                                                        <th>模型</th>
+                                                        <th>R²</th>
+                                                        <th>RMSE</th>
+                                                        <th>MAE</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted py-4">
+                                                            <i class="bi bi-arrow-up"></i><br>
+                                                            点击"运行模拟"查看结果
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- 图表区域 -->
+                                    <div class="row">
+                                        <div class="col-md-6 mb-4">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0" id="regressionChart1Title">R²对比</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <canvas id="regressionChart1"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-4">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0" id="regressionChart2Title">RMSE对比</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <canvas id="regressionChart2"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0">综合性能雷达图</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <canvas id="regressionRadarChart"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 提示信息（已废弃，使用Toast通知系统） -->
+                    <div id="regressionAlertBox" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 添加自定义模型模态框 -->
