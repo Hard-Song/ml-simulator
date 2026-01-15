@@ -391,7 +391,6 @@
                             </div>
                         </div>
                         <div class="mt-2 d-flex gap-2 flex-wrap">
-                            <small class="text-white">批量操作：</small>
                             <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('binary')">二分类模型</button>
                             <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('multiclass')">多分类模型</button>
                             <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('regression')">回归模型</button>
@@ -775,7 +774,8 @@
                                         </div>
                                     </div>
                                     <div class="mt-2 d-flex gap-2 flex-wrap">
-                                        <small class="text-white">批量操作：</small>
+                                        <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('binary')">二分类模型</button>
+                                        <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('multiclass')">多分类模型</button>
                                         <button class="btn btn-sm btn-outline-light" onclick="selectModelsByTask('regression')">回归模型</button>
                                         <button class="btn btn-sm btn-outline-light" onclick="selectAllModels()">全选</button>
                                         <button class="btn btn-sm btn-outline-light" onclick="deselectAllModels()">全不选</button>
@@ -815,7 +815,7 @@
                                                 </small>
                                             </div>
                                             <small class="text-muted">
-                                                💡 操作提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
+                                                💡 操作提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。切换任务类型时会自动勾选对应模型。
                                             </small>
                                         </div>
                                     </div>

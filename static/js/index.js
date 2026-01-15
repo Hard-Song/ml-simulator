@@ -127,12 +127,21 @@ function generateRegressionModelCardHTML(modelName, profile, isCustom) {
         </button>
     ` : '';
 
-    // 生成任务标签
+    // 生成任务标签（与分类页保持一致，显示所有支持的标签）
     const supportedTasks = profile.supported_tasks || ['binary', 'multiclass', 'regression'];
-    const supportsRegression = supportedTasks.includes('regression');
-    const taskBadge = supportsRegression
-        ? `<span class="badge bg-info me-1" style="font-size: 0.7rem;">回归</span>`
-        : `<span class="badge bg-secondary me-1" style="font-size: 0.7rem;">不支持</span>`;
+    const taskBadges = supportedTasks.map(task => {
+        const labels = {
+            'binary': '二分类',
+            'multiclass': '多分类',
+            'regression': '回归'
+        };
+        const colors = {
+            'binary': 'bg-primary',
+            'multiclass': 'bg-success',
+            'regression': 'bg-info'
+        };
+        return `<span class="badge ${colors[task]} me-1" style="font-size: 0.7rem;">${labels[task]}</span>`;
+    }).join('');
 
     return `
         <div class="model-card" id="${modelId}_card" onclick="toggleRegressionModelCard('${modelName}')">
@@ -143,7 +152,6 @@ function generateRegressionModelCardHTML(modelName, profile, isCustom) {
                                type="checkbox"
                                value="${modelName}"
                                id="${modelId}_checkbox"
-                               ${!supportsRegression ? 'disabled' : ''}
                                onclick="event.stopPropagation(); toggleRegressionModelSelection('${modelName}')">
                     </div>
                     <div class="flex-grow-1">
@@ -151,7 +159,7 @@ function generateRegressionModelCardHTML(modelName, profile, isCustom) {
                             ${modelName.toUpperCase()}
                             ${isCustom ? ' <span class="badge bg-warning text-dark">自定义</span>' : ''}
                         </span>
-                        <div class="mt-1">${taskBadge}</div>
+                        <div class="mt-1">${taskBadges}</div>
                     </div>
                 </div>
                 <div class="d-flex align-items-center">
@@ -436,11 +444,9 @@ function toggleModelSelection(modelName) {
     const card = document.getElementById(`model_${modelName}_card`);
     const header = document.getElementById(`model_${modelName}_header`);
 
-    checkbox.checked = !checkbox.checked;
-
+    // checkbox 的状态已经由点击事件自动切换了，这里只需要更新卡片样式
     if (checkbox.checked) {
         card.classList.add('selected');
-        // 不再使用内联样式，CSS会处理选中状态
     } else {
         card.classList.remove('selected');
     }
@@ -900,13 +906,23 @@ function deselectAllModels() {
 
 // 更新模型卡片的选中状态
 function updateModelCardSelection(modelName, isSelected) {
-    const card = document.getElementById(`model_${modelName}_card`);
-
-    if (card) {
+    // 尝试更新分类页的模型卡片
+    const classCard = document.getElementById(`model_${modelName}_card`);
+    if (classCard) {
         if (isSelected) {
-            card.classList.add('selected');
+            classCard.classList.add('selected');
         } else {
-            card.classList.remove('selected');
+            classCard.classList.remove('selected');
+        }
+    }
+
+    // 尝试更新回归页的模型卡片
+    const regCard = document.getElementById(`regression_model_${modelName}_card`);
+    if (regCard) {
+        if (isSelected) {
+            regCard.classList.add('selected');
+        } else {
+            regCard.classList.remove('selected');
         }
     }
 }
