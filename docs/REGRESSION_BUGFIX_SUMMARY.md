@@ -431,3 +431,52 @@ const TaskUI = {
 - **问题诊断**: 2025-01-14
 - **修复完成**: 2025-01-14
 - **文档更新**: 2025-01-14
+
+---
+
+## 补充修复 (2025-01-15)
+
+### 问题描述
+
+在`export_csv`函数中发现了未定义的`reg_difficulty`变量问题。
+
+### 根本原因
+
+`/api/export/csv`函数中缺少了回归难度配置的创建代码，导致在交叉验证和单次运行导出时使用了未定义的`reg_difficulty`变量。
+
+### 修复方案
+
+在`export_csv`函数的第634-645行添加回归难度配置创建代码：
+
+```python
+# 创建回归难度配置（如果需要）
+reg_difficulty = None
+if task_type == TaskType.REGRESSION:
+    reg_data = data.get('regression_difficulty', {})
+    reg_difficulty = RegressionDifficulty(
+        signal_to_noise=float(reg_data.get('signal_to_noise', 1.0)),
+        function_complexity=float(reg_data.get('function_complexity', 0.5)),
+        noise_level=float(reg_data.get('noise_level', 0.2)),
+        heteroscedastic=bool(reg_data.get('heteroscedastic', True)),
+        n_features=int(reg_data.get('n_features', 10)),
+        feature_noise=float(reg_data.get('feature_noise', 0.05)),
+    )
+```
+
+同时在单次运行导出分支（第818-829行）添加`reg_difficulty`参数传递。
+
+### 影响范围
+
+- 修复文件: `app.py`
+- 修复位置: `export_csv`函数
+- 影响功能: 回归任务的CSV导出功能
+
+### 验证方法
+
+```bash
+python -m py_compile app.py  # 语法检查通过
+```
+
+### 相关问题
+
+这个问题与之前在`/api/simulate`函数中修复的问题类似，表明在添加回归任务支持时，需要确保所有使用`compare_models`函数的地方都传递了`reg_difficulty`参数。
