@@ -304,37 +304,71 @@
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label">类间可分性</label>
+                            <label class="form-label d-flex justify-content-between">
+                                <span>类间可分性</span>
+                                <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="不同类别特征之间的可区分程度。越高表示类别越容易分开">💡</span>
+                            </label>
                             <input type="range" class="form-range" id="separability" min="0" max="1" step="0.05" value="0.7">
                             <div class="d-flex justify-content-between">
-                                <small>难</small>
+                                <small class="text-muted">0 (难分)</small>
                                 <span class="param-value" id="separabilityValue">0.7</span>
-                                <small>易</small>
+                                <small class="text-muted">1 (易分)</small>
                             </div>
+                            <small class="text-muted d-block mt-1">
+                                💡 建议: 0.6-0.8为正常难度，&gt;0.9适合测试弱模型，&lt;0.4测试强模型鲁棒性
+                            </small>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">标签噪声</label>
+                            <label class="form-label d-flex justify-content-between">
+                                <span>标签噪声</span>
+                                <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="标签被错误标记的比例。一部分样本的标签会被随机翻转">💡</span>
+                            </label>
                             <input type="range" class="form-range" id="labelNoise" min="0" max="0.5" step="0.01" value="0.05">
-                            <div class="text-center">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">0 (无噪声)</small>
                                 <span class="param-value" id="labelNoiseValue">0.05</span>
+                                <small class="text-muted">0.5 (高噪声)</small>
                             </div>
+                            <small class="text-muted d-block mt-1">
+                                💡 建议: 0.02-0.1为正常范围，0.15-0.3模拟标注质量差，&gt;0.3测试模型极限
+                            </small>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">特征噪声</label>
+                            <label class="form-label d-flex justify-content-between">
+                                <span>特征噪声</span>
+                                <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="特征向量X中添加的噪声强度。降低特征的信息量">💡</span>
+                            </label>
                             <input type="range" class="form-range" id="featureNoise" min="0" max="0.5" step="0.01" value="0.1">
-                            <div class="text-center">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">0 (纯净)</small>
                                 <span class="param-value" id="featureNoiseValue">0.1</span>
+                                <small class="text-muted">0.5 (嘈杂)</small>
                             </div>
+                            <small class="text-muted d-block mt-1">
+                                💡 建议: 0.05-0.2为正常范围，&gt;0.3需要强特征工程，&lt;0.05接近理想数据
+                            </small>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">非线性强度</label>
+                            <label class="form-label d-flex justify-content-between">
+                                <span>非线性强度</span>
+                                <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                       title="决策边界的非线性程度。越高需要模型有更强的非线性表达能力">💡</span>
+                            </label>
                             <input type="range" class="form-range" id="nonlinearity" min="0" max="1" step="0.05" value="0.3">
-                            <div class="text-center">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">0 (线性)</small>
                                 <span class="param-value" id="nonlinearityValue">0.3</span>
+                                <small class="text-muted">1 (高度非线性)</small>
                             </div>
+                            <small class="text-muted d-block mt-1">
+                                💡 建议: 0-0.3适合线性模型，0.3-0.6需树模型，&gt;0.6需DNN/Transformer
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -366,10 +400,40 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        <!-- 模型能力参数说明 -->
                         <div class="row mb-3">
                             <div class="col-12">
+                                <div class="alert alert-info mb-2" role="alert">
+                                    <h6 class="alert-heading">📖 模型能力参数说明</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <small><strong>Bias (偏差):</strong> 系统性偏差，越高模型越容易欠拟合</small><br>
+                                            <small class="text-muted">💡 建议: 线性模型0.4-0.6，树模型0.2-0.4，DNN/Transformer 0.1-0.3</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small><strong>Variance (方差):</strong> 预测不稳定性，越高模型越容易过拟合</small><br>
+                                            <small class="text-muted">💡 建议: 线性模型0.1-0.2，树模型0.3-0.5，DNN/Transformer 0.4-0.7</small>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-6">
+                                            <small><strong>Capacity (容量):</strong> 模型表达能力上限，越高拟合能力越强</small><br>
+                                            <small class="text-muted">💡 建议: 线性模型0.4-0.6，树模型0.7-0.8，DNN/Transformer 0.9-1.0</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small><strong>Noise Tol. (噪声容忍度):</strong> 对噪声的抗干扰能力</small><br>
+                                            <small class="text-muted">💡 建议: 树模型较高(0.7-0.9)，DNN中等(0.4-0.6)，线性模型一般(0.4-0.5)</small>
+                                        </div>
+                                    </div>
+                                    <hr class="my-2">
+                                    <small class="text-muted">
+                                        <strong>调参策略:</strong> • 低可分性 → 提高capacity • 高标签噪声 → 提高noise_tolerance •
+                                        高非线性 → 提高capacity • 欠拟合(低Acc) → 降低bias,提高capacity •
+                                        过拟合(训练Acc高但测试Acc低) → 降低variance,提高noise_tolerance
+                                    </small>
+                                </div>
                                 <small class="text-muted">
-                                    💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。切换任务类型时会自动勾选对应模型。
+                                    💡 操作提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。切换任务类型时会自动勾选对应模型。
                                 </small>
                             </div>
                         </div>
