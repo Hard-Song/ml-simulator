@@ -62,6 +62,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initCharts();
     initRegressionCharts();
 
+    // 初始化Bootstrap Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
     // 初始化任务类型UI（根据默认选择隐藏/显示相应字段）
     const initialTaskType = document.getElementById('taskType').value;
     updateUIForTaskType(initialTaskType);

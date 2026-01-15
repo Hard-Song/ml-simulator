@@ -600,55 +600,95 @@
                                 </div>
                                 <div class="card-body">
                                     <div class="mb-3">
-                                        <label class="form-label">信噪比</label>
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span>信噪比</span>
+                                            <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                   title="信号方差与噪声方差的比值。越高表示数据质量越好，模型越容易学习">💡</span>
+                                        </label>
                                         <input type="range" class="form-range" id="regSignalToNoise" min="0.1" max="2.0" step="0.1" value="1.0">
                                         <div class="d-flex justify-content-between">
-                                            <small>低</small>
+                                            <small class="text-muted">0.1 (难学)</small>
                                             <span class="param-value" id="regSignalToNoiseValue">1.0</span>
-                                            <small>高</small>
+                                            <small class="text-muted">2.0 (简单)</small>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 1.0为中等难度，&gt;1.5适合测试强模型，&lt;0.5测试模型鲁棒性
+                                        </small>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">函数复杂度</label>
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span>函数复杂度</span>
+                                            <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                   title="真实函数f(X)的非线性程度。越高需要模型有更强的表达能力">💡</span>
+                                        </label>
                                         <input type="range" class="form-range" id="regFunctionComplexity" min="0" max="1" step="0.1" value="0.5">
                                         <div class="d-flex justify-content-between">
-                                            <small>线性</small>
+                                            <small class="text-muted">线性</small>
                                             <span class="param-value" id="regFunctionComplexityValue">0.5</span>
-                                            <small>高度非线性</small>
+                                            <small class="text-muted">高度非线性</small>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 0-0.3适合线性模型，0.4-0.7需树模型/DNN，&gt;0.7需强非线性模型
+                                        </small>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">噪声水平</label>
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span>噪声水平</span>
+                                            <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                   title="目标值y中的基础噪声强度。影响所有样本的预测难度">💡</span>
+                                        </label>
                                         <input type="range" class="form-range" id="regNoiseLevel" min="0" max="1" step="0.05" value="0.2">
                                         <div class="d-flex justify-content-between">
-                                            <small>低</small>
+                                            <small class="text-muted">0 (纯净)</small>
                                             <span class="param-value" id="regNoiseLevelValue">0.2</span>
-                                            <small>高</small>
+                                            <small class="text-muted">1 (嘈杂)</small>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 0.1-0.3为正常范围，&gt;0.5测试模型噪声容忍度
+                                        </small>
                                     </div>
                                     <div class="mb-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="regHeteroscedastic" checked>
                                             <label class="form-check-label" for="regHeteroscedastic">
                                                 异方差性（噪声随|y|增大）
+                                                <span class="badge bg-info ms-1" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                       title="勾选后噪声大小会随目标值绝对值增大而增大，更接近真实场景">💡</span>
                                             </label>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 勾选以模拟真实场景（如房价预测中高价房波动更大）
+                                        </small>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">特征数量</label>
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span>特征数量</span>
+                                            <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                   title="特征矩阵X的维度。特征越多，高维空间越复杂，越容易过拟合">💡</span>
+                                        </label>
                                         <input type="range" class="form-range" id="regNFeatures" min="2" max="20" step="1" value="10">
                                         <div class="text-center">
                                             <span class="badge bg-primary" id="regNFeaturesValue">10</span>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 5-10为简单任务，10-15需正则化，&gt;15测试高维处理能力
+                                        </small>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">特征噪声</label>
+                                        <label class="form-label d-flex justify-content-between">
+                                            <span>特征噪声</span>
+                                            <span class="badge bg-info" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                   title="特征矩阵X本身的噪声水平。特征噪声会降低模型学习信号的能力">💡</span>
+                                        </label>
                                         <input type="range" class="form-range" id="regFeatureNoise" min="0" max="0.5" step="0.01" value="0.05">
                                         <div class="d-flex justify-content-between">
-                                            <small>无</small>
+                                            <small class="text-muted">0 (无噪声)</small>
                                             <span class="param-value" id="regFeatureNoiseValue">0.05</span>
-                                            <small>高</small>
+                                            <small class="text-muted">0.5 (高噪声)</small>
                                         </div>
+                                        <small class="text-muted d-block mt-1">
+                                            💡 建议: 0.01-0.1为正常范围，&gt;0.2测试特征工程能力
+                                        </small>
                                     </div>
                                 </div>
                             </div>
@@ -678,10 +718,40 @@
                                     </div>
                                 </div>
                                 <div class="card-body">
+                                    <!-- 模型能力参数说明 -->
                                     <div class="row mb-3">
                                         <div class="col-12">
+                                            <div class="alert alert-info mb-2" role="alert">
+                                                <h6 class="alert-heading">📖 模型能力参数说明</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <small><strong>Bias (偏差):</strong> 系统性偏差，越高模型越容易欠拟合</small><br>
+                                                        <small class="text-muted">💡 建议: 线性模型0.4-0.6，树模型0.2-0.4，DNN/Transformer 0.1-0.3</small>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small><strong>Variance (方差):</strong> 预测不稳定性，越高模型越容易过拟合</small><br>
+                                                        <small class="text-muted">💡 建议: 线性模型0.1-0.2，树模型0.3-0.5，DNN/Transformer 0.4-0.7</small>
+                                                    </div>
+                                                </div>
+                                                <div class="row mt-2">
+                                                    <div class="col-md-6">
+                                                        <small><strong>Capacity (容量):</strong> 模型表达能力上限，越高拟合能力越强</small><br>
+                                                        <small class="text-muted">💡 建议: 线性模型0.4-0.6，树模型0.7-0.8，DNN/Transformer 0.9-1.0</small>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small><strong>Noise Tol. (噪声容忍度):</strong> 对噪声的抗干扰能力</small><br>
+                                                        <small class="text-muted">💡 建议: 树模型较高(0.7-0.9)，DNN中等(0.4-0.6)，线性模型一般(0.4-0.5)</small>
+                                                    </div>
+                                                </div>
+                                                <hr class="my-2">
+                                                <small class="text-muted">
+                                                    <strong>调参策略:</strong> • 低信噪比 → 提高noise_tolerance • 高函数复杂度 → 提高capacity •
+                                                    高方差任务 → 降低variance • 欠拟合(R²低) → 降低bias,提高capacity •
+                                                    过拟合(R²高但不稳定) → 提高noise_tolerance,降低variance
+                                                </small>
+                                            </div>
                                             <small class="text-muted">
-                                                💡 提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
+                                                💡 操作提示：点击模型卡片头部可选中/取消选中。点击右侧箭头展开详细参数。每个模型可单独调整能力参数。
                                             </small>
                                         </div>
                                     </div>
