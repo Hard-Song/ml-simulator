@@ -6,6 +6,107 @@ let modelProfiles = {};  // 存储每个模型的能力参数
 let customModels = [];  // 存储自定义模型名称
 let currentTaskMode = 'classification';  // 当前任务模式：'classification' 或 'regression'
 
+// =============================================================================
+// 主题管理
+// =============================================================================
+
+// 初始化主题
+function initializeTheme() {
+    // 从localStorage读取用户主题偏好
+    const savedTheme = localStorage.getItem('theme');
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+        if (themeIcon) themeIcon.textContent = '☀️';
+    } else {
+        document.body.classList.remove('dark-mode');
+        if (themeIcon) themeIcon.textContent = '🌙';
+    }
+
+    // 绑定主题切换事件
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+}
+
+// 切换主题
+function toggleTheme() {
+    const body = document.body;
+    const themeIcon = document.getElementById('themeIcon');
+
+    if (body.classList.contains('dark-mode')) {
+        // 切换到浅色模式
+        body.classList.remove('dark-mode');
+        localStorage.setItem('theme', 'light');
+        if (themeIcon) themeIcon.textContent = '🌙';
+        showAlert('已切换到浅色模式', 'info');
+    } else {
+        // 切换到深色模式
+        body.classList.add('dark-mode');
+        localStorage.setItem('theme', 'dark');
+        if (themeIcon) themeIcon.textContent = '☀️';
+        showAlert('已切换到深色模式', 'info');
+    }
+
+    // 更新图表颜色以适应主题
+    updateChartsTheme();
+}
+
+// 更新图表主题
+function updateChartsTheme() {
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
+    const gridColor = isDark ? '#404040' : '#e8e8e8';
+
+    // 更新所有图表的颜色配置
+    Object.values(charts).forEach(chart => {
+        if (chart && chart.options) {
+            // 更新坐标轴颜色
+            if (chart.options.scales) {
+                if (chart.options.scales.x) {
+                    chart.options.scales.x.ticks = {
+                        color: textColor
+                    };
+                    chart.options.scales.x.grid = {
+                        color: gridColor
+                    };
+                }
+                if (chart.options.scales.y) {
+                    chart.options.scales.y.ticks = {
+                        color: textColor
+                    };
+                    chart.options.scales.y.grid = {
+                        color: gridColor
+                    };
+                }
+                if (chart.options.scales.r) {
+                    chart.options.scales.r.ticks = {
+                        color: textColor,
+                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
+                    };
+                    chart.options.scales.r.grid = {
+                        color: gridColor
+                    };
+                    chart.options.scales.r.pointLabels = {
+                        color: textColor
+                    };
+                }
+            }
+
+            // 更新图例颜色
+            if (chart.options.plugins && chart.options.plugins.legend) {
+                chart.options.plugins.legend.labels = {
+                    color: textColor
+                };
+            }
+
+            chart.update();
+        }
+    });
+}
+
 // 预定义模型能力画像
 const DEFAULT_PROFILES = {
     'svm': {
@@ -52,6 +153,9 @@ const DEFAULT_PROFILES = {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化主题
+    initializeTheme();
+
     // 初始化模型卡片
     initializeModelCards();
 
@@ -986,6 +1090,10 @@ function drawErrorBars(chart) {
 
 // 初始化图表
 function initCharts() {
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
+    const gridColor = isDark ? '#404040' : '#e8e8e8';
+
     // 柱状图1
     const ctx1 = document.getElementById('chart1').getContext('2d');
     charts.chart1 = new Chart(ctx1, {
@@ -1004,12 +1112,19 @@ function initCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 1
+                    max: 1,
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
                 }
             },
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: { color: textColor }
                 }
             }
         },
@@ -1037,12 +1152,19 @@ function initCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 1
+                    max: 1,
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
                 }
             },
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: { color: textColor }
                 }
             }
         },
@@ -1065,7 +1187,18 @@ function initCharts() {
             scales: {
                 r: {
                     beginAtZero: true,
-                    max: 1
+                    max: 1,
+                    ticks: {
+                        color: textColor,
+                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
+                    },
+                    grid: { color: gridColor },
+                    pointLabels: { color: textColor }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: textColor }
                 }
             }
         }
@@ -1074,6 +1207,10 @@ function initCharts() {
 
 // 初始化回归图表
 function initRegressionCharts() {
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
+    const gridColor = isDark ? '#404040' : '#e8e8e8';
+
     // 柱状图1 (MAE)
     const ctx1 = document.getElementById('regressionChart1').getContext('2d');
     charts.regressionChart1 = new Chart(ctx1, {
@@ -1091,12 +1228,19 @@ function initRegressionCharts() {
             responsive: true,
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
                 }
             },
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: { color: textColor }
                 }
             }
         },
@@ -1123,12 +1267,19 @@ function initRegressionCharts() {
             responsive: true,
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
                 }
             },
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: { color: textColor }
                 }
             }
         },
@@ -1151,7 +1302,18 @@ function initRegressionCharts() {
             scales: {
                 r: {
                     beginAtZero: true,
-                    max: 1
+                    max: 1,
+                    ticks: {
+                        color: textColor,
+                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
+                    },
+                    grid: { color: gridColor },
+                    pointLabels: { color: textColor }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: textColor }
                 }
             }
         }
