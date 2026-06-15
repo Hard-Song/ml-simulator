@@ -843,6 +843,254 @@ def export_csv():
 
 
 # =============================================================================
+# API：单模型详情（含原始 prob，供画 ROC/PR/混淆矩阵与导出）
+# =============================================================================
+
+def _resolve_model_profile(model_name, models_config, custom_profile_data):
+    """根据请求解析单个模型的 ModelProfile（与 simulate 逻辑一致）"""
+    from ml_simulator import ModelProfile
+
+    if models_config and model_name in models_config:
+        config = models_config[model_name]
+        return ModelProfile(
+            bias=float(config.get('bias', 0.5)),
+            variance=float(config.get('variance', 0.3)),
+            capacity=float(config.get('capacity', 0.7)),
+            noise_tolerance=float(config.get('noise_tolerance', 0.5)),
+        )
+    if custom_profile_data:
+        return ModelProfile(
+            bias=float(custom_profile_data.get('bias', 0.5)),
+            variance=float(custom_profile_data.get('variance', 0.3)),
+            capacity=float(custom_profile_data.get('capacity', 0.7)),
+            noise_tolerance=float(custom_profile_data.get('noise_tolerance', 0.5)),
+        )
+    return model_name  # 使用预定义画像
+
+
+def _roc_curve_interpolated(y_true, y_score, n_points=101):
+    """
+    计算 ROC 曲线，并把 tpr 插值到均匀 fpr 网格（0~1，n_points 个点）。
+    返回 (fpr_grid, tpr_interp, auc)；单类返回 None。
+    用于 CV 模式下多折 ROC 的置信区间可视化。
+    """
+    y_true = np.asarray(y_true).astype(int)
+    y_score = np.asarray(y_score, dtype=float)
+    P = int((y_true == 1).sum())
+    N = int((y_true == 0).sum())
+    if P == 0 or N == 0:
+        return None
+
+    order = np.argsort(-y_score)
+    s_sorted = y_score[order]
+    lab_sorted = y_true[order]
+
+    fpr = [0.0]
+    tpr = [0.0]
+    tp = 0
+    fp = 0
+    n = len(s_sorted)
+    for i in range(n):
+        if lab_sorted[i] == 1:
+            tp += 1
+        else:
+            fp += 1
+        if i < n - 1 and abs(s_sorted[i + 1] - s_sorted[i]) < 1e-12:
+            continue
+        fpr.append(fp / N)
+        tpr.append(tp / P)
+    fpr.append(1.0)
+    tpr.append(1.0)
+
+    fpr = np.array(fpr)
+    tpr = np.array(tpr)
+    trapz = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+    auc = float(trapz(tpr, fpr))
+
+    grid = np.linspace(0, 1, n_points)
+    tpr_interp = np.interp(grid, fpr, tpr)
+    return grid.tolist(), tpr_interp.tolist(), auc
+
+
+@app.route('/api/model_detail', methods=['POST'])
+def model_detail():
+    """
+    获取单个模型的详细诊断数据（原始 y_true / y_prob / y_pred），
+    供前端绘制 ROC / PR / 混淆矩阵 / 散点残差图，以及导出 prob。
+
+    请求体：同 /api/simulate，额外字段：
+        "target_model": "lgbm"   指定要查看的单个模型（缺省取 models[0]）
+        "with_cv_stats": true    当实验方案为 cv 时，是否回传该模型多折的 mean/std（供 error-bar）
+
+    返回（节选）：
+        metrics: 单次模拟的整体指标
+        metrics_stats: cv 下的 {metric: {"mean":..,"std":..}} 或 null
+        y_true: 标签数组（分类为 int，回归为 float）
+        y_pred: 预测类别（分类）/ 预测值（回归）
+        y_prob: 概率矩阵（分类，n_samples×n_classes）；回归为 null
+    """
+    try:
+        data = request.get_json()
+
+        task_type_str = data.get('task_type', 'binary')
+        task_type = TaskType(task_type_str)
+
+        base_random_state = int(data.get('random_state', 42))
+
+        n_classes = data.get('n_classes')
+        if task_type != TaskType.REGRESSION:
+            n_classes = int(n_classes) if n_classes is not None else 2
+        else:
+            n_classes = None
+
+        num_samples = int(data.get('num_samples', 5000))
+        task_config = TaskConfig(
+            task_type=task_type,
+            num_samples=num_samples,
+            n_classes=n_classes,
+            label_distribution=data.get('label_distribution'),
+            random_state=base_random_state,
+        )
+
+        difficulty_data = data.get('difficulty', {})
+        difficulty = DifficultyConfig(
+            separability=float(difficulty_data.get('separability', 0.6)),
+            label_noise=float(difficulty_data.get('label_noise', 0.1)),
+            feature_noise=float(difficulty_data.get('feature_noise', 0.2)),
+            nonlinearity=float(difficulty_data.get('nonlinearity', 0.7)),
+            spurious_correlation=float(difficulty_data.get('spurious_correlation', 0.3)),
+        )
+
+        reg_difficulty = None
+        if task_type == TaskType.REGRESSION:
+            reg_data = data.get('regression_difficulty', {})
+            reg_difficulty = RegressionDifficulty(
+                signal_to_noise=float(reg_data.get('signal_to_noise', 1.0)),
+                function_complexity=float(reg_data.get('function_complexity', 0.5)),
+                noise_level=float(reg_data.get('noise_level', 0.2)),
+                heteroscedastic=bool(reg_data.get('heteroscedastic', True)),
+                n_features=int(reg_data.get('n_features', 10)),
+                feature_noise=float(reg_data.get('feature_noise', 0.05)),
+            )
+
+        models_config = data.get('models_config', {})
+        custom_profile_data = data.get('custom_profile')
+        model_names = data.get('models', [])
+        target_model = data.get('target_model')
+        if not target_model:
+            target_model = model_names[0] if model_names else 'lgbm'
+
+        profile = _resolve_model_profile(target_model, models_config, custom_profile_data)
+
+        # ---- 单次模拟：取指标 + 原始预测 ----
+        simulator = MLSimulator(
+            task_config=task_config,
+            difficulty=difficulty,
+            model_profile=profile,
+            reg_difficulty=reg_difficulty,
+        )
+        metrics = simulator.simulate()
+        predictions = simulator.get_predictions()
+        y_true = simulator.y_true
+
+        # 预测类别 / 概率矩阵
+        if task_type == TaskType.REGRESSION:
+            y_pred_arr = np.asarray(predictions).reshape(-1).tolist()
+            y_prob_resp = None
+        else:
+            prob_matrix = np.asarray(predictions)
+            if prob_matrix.ndim == 1:
+                prob_matrix = np.vstack([1 - prob_matrix, prob_matrix]).T
+            y_pred_arr = np.argmax(prob_matrix, axis=1).astype(int).tolist()
+            y_prob_resp = prob_matrix.tolist()
+
+        # 标签数组
+        if task_type == TaskType.REGRESSION:
+            y_true_resp = np.asarray(y_true, dtype=float).reshape(-1).tolist()
+        else:
+            y_true_resp = np.asarray(y_true, dtype=int).reshape(-1).tolist()
+
+        # ---- CV 统计（可选）：该模型多折的 mean/std + ROC 置信区间 ----
+        metrics_stats = None
+        roc_cv = None
+        experiment_config = data.get('experiment_config', {})
+        if data.get('with_cv_stats') and experiment_config.get('type') == 'cv':
+            n_folds = int(experiment_config.get('n_folds', 5))
+            fold_records = []
+            fold_tprs = []   # 每折插值到统一网格的 tpr（仅二分类）
+            fold_grid = None
+            for fold in range(n_folds):
+                fold_task_config = TaskConfig(
+                    task_type=task_config.task_type,
+                    num_samples=task_config.num_samples,
+                    n_classes=task_config.n_classes,
+                    label_distribution=task_config.label_distribution,
+                    random_state=base_random_state + fold,
+                )
+                fold_sim = MLSimulator(
+                    task_config=fold_task_config,
+                    difficulty=difficulty,
+                    model_profile=profile,
+                    reg_difficulty=reg_difficulty,
+                )
+                fold_metrics = fold_sim.simulate()
+                fold_records.append({k: v for k, v in fold_metrics.items()
+                                     if isinstance(v, (int, float))})
+
+                # 二分类：收集每折插值 ROC
+                if task_type != TaskType.REGRESSION and task_config.n_classes == 2:
+                    fold_pred = fold_sim.get_predictions()
+                    fold_prob = np.asarray(fold_pred)
+                    if fold_prob.ndim == 1:
+                        fold_score = fold_prob
+                    else:
+                        fold_score = fold_prob[:, 1]
+                    res = _roc_curve_interpolated(fold_sim.y_true, fold_score)
+                    if res is not None:
+                        fold_grid, tpr_interp, _ = res
+                        fold_tprs.append(tpr_interp)
+
+            # 聚合指标 mean/std
+            metrics_stats = {}
+            for key in fold_records[0].keys():
+                vals = np.array([r[key] for r in fold_records], dtype=float)
+                metrics_stats[key] = {
+                    'mean': float(np.mean(vals)),
+                    'std': float(np.std(vals)),
+                }
+
+            # 聚合 ROC：mean / std（逐 fpr 点）
+            if fold_tprs and fold_grid is not None:
+                tpr_mat = np.array(fold_tprs)  # (n_folds, n_points)
+                roc_cv = {
+                    'fpr': fold_grid,
+                    'tpr_mean': np.mean(tpr_mat, axis=0).tolist(),
+                    'tpr_std': np.std(tpr_mat, axis=0).tolist(),
+                }
+
+        return jsonify({
+            'success': True,
+            'model': target_model,
+            'task_type': task_type.value,
+            'n_classes': n_classes if n_classes is not None else 0,
+            'metrics': metrics,
+            'metrics_stats': metrics_stats,
+            'roc_cv': roc_cv,
+            'y_true': y_true_resp,
+            'y_pred': y_pred_arr,
+            'y_prob': y_prob_resp,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
+# =============================================================================
 # 启动服务器
 # =============================================================================
 

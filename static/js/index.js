@@ -54,58 +54,56 @@ function toggleTheme() {
     updateChartsTheme();
 }
 
-// 更新图表主题
+// 更新图表主题（主题切换后调用）
 function updateChartsTheme() {
     const isDark = document.body.classList.contains('dark-mode');
     const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
     const gridColor = isDark ? '#404040' : '#e8e8e8';
 
-    // 更新所有图表的颜色配置
-    Object.values(charts).forEach(chart => {
+    // 普通柱状/折线/雷达/占位图：直接更新配置
+    const simpleKeys = [
+        'chart1', 'chart2', 'radar',
+        'lcChart1', 'lcChart2',
+        'detailMetrics',
+        'regressionChart1', 'regressionChart2', 'regressionRadar',
+        'regLcChart1', 'regLcChart2',
+        'regDetailMetrics',
+        '_rocChart', '_prChart', '_confusionChart',
+        '_regPredVsTrueChart', '_regResidualChart',
+    ];
+
+    simpleKeys.forEach(key => {
+        const chart = charts[key];
         if (chart && chart.options) {
-            // 更新坐标轴颜色
             if (chart.options.scales) {
-                if (chart.options.scales.x) {
-                    chart.options.scales.x.ticks = {
-                        color: textColor
-                    };
-                    chart.options.scales.x.grid = {
-                        color: gridColor
-                    };
-                }
-                if (chart.options.scales.y) {
-                    chart.options.scales.y.ticks = {
-                        color: textColor
-                    };
-                    chart.options.scales.y.grid = {
-                        color: gridColor
-                    };
-                }
+                ['x', 'y'].forEach(ax => {
+                    if (chart.options.scales[ax]) {
+                        chart.options.scales[ax].ticks = Object.assign({}, chart.options.scales[ax].ticks, { color: textColor });
+                        chart.options.scales[ax].grid = { color: gridColor };
+                    }
+                });
                 if (chart.options.scales.r) {
-                    chart.options.scales.r.ticks = {
-                        color: textColor,
-                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
-                    };
-                    chart.options.scales.r.grid = {
-                        color: gridColor
-                    };
-                    chart.options.scales.r.pointLabels = {
-                        color: textColor
-                    };
+                    chart.options.scales.r.ticks = { color: textColor, backdropColor: isDark ? '#2d2d2d' : '#ffffff' };
+                    chart.options.scales.r.grid = { color: gridColor };
+                    chart.options.scales.r.pointLabels = { color: textColor };
                 }
             }
-
-            // 更新图例颜色
             if (chart.options.plugins && chart.options.plugins.legend) {
-                chart.options.plugins.legend.labels = {
-                    color: textColor
-                };
+                chart.options.plugins.legend.labels = Object.assign({}, chart.options.plugins.legend.labels, { color: textColor });
             }
-
-            chart.update();
+            if (chart.options.plugins && chart.options.plugins.title) {
+                chart.options.plugins.title.color = ChartLib.getThemeColors().muted;
+            }
+            try { chart.update(); } catch (e) { /* 图表可能已销毁，忽略 */ }
         }
     });
+
+    // ROC/PR/混淆矩阵/散点 带数据的图：用缓存的数据重建以刷新配色
+    if (lastDetailData) renderDetailCharts(lastDetailData, currentTaskMode === 'regression');
 }
+
+// 缓存最近一次单模型详情数据，供主题切换时重建图表
+let lastDetailData = null;
 
 // 预定义模型能力画像
 const DEFAULT_PROFILES = {
@@ -178,6 +176,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化回归任务的模型卡片
     initializeRegressionModelCards();
+
+    // 初始化单模型详情下拉（用预定义模型，默认选中第一个，未运行也可查看）
+    currentTaskMode = 'classification';
+    populateDetailModelSelectDefault();
 });
 
 // 切换任务模式（分类/回归）
@@ -190,6 +192,12 @@ function switchTaskMode(mode) {
     } else if (mode === 'regression') {
         // 切换到回归任务，自动选择支持回归的模型
         selectModelsByTask('regression');
+    }
+    // 切换任务模式时刷新对应的详情下拉（若尚未运行过，用预定义模型填充）
+    const selectId = mode === 'regression' ? 'regDetailModelSelect' : 'detailModelSelect';
+    const sel = document.getElementById(selectId);
+    if (sel && sel.options.length === 0) {
+        populateDetailModelSelectDefault();
     }
 }
 
@@ -843,6 +851,25 @@ function bindEvents() {
 
     // 导出按钮（回归任务）
     document.getElementById('regressionExportBtn').addEventListener('click', exportCSV);
+
+    // 单模型详情：下拉切换 + 导出 prob
+    const detailSelect = document.getElementById('detailModelSelect');
+    if (detailSelect) detailSelect.addEventListener('change', refreshDetail);
+    const regDetailSelect = document.getElementById('regDetailModelSelect');
+    if (regDetailSelect) regDetailSelect.addEventListener('change', refreshDetail);
+
+    const exportProbBtn = document.getElementById('exportProbBtn');
+    if (exportProbBtn) exportProbBtn.addEventListener('click', exportModelProb);
+    const regExportProbBtn = document.getElementById('regExportProbBtn');
+    if (regExportProbBtn) regExportProbBtn.addEventListener('click', exportModelProb);
+
+    // 详情 Tab 首次激活时自动加载当前选中模型
+    document.getElementById('detail-tab')?.addEventListener('shown.bs.tab', refreshDetail);
+    document.getElementById('regDetail-tab')?.addEventListener('shown.bs.tab', refreshDetail);
+
+    // 样本量输入校验
+    clampNumSamples('numSamples');
+    clampNumSamples('regressionNumSamples');
 }
 
 // 绑定滑块
@@ -1031,292 +1058,80 @@ function updateModelCardSelection(modelName, isSelected) {
     }
 }
 
-// 绘制误差线
+// 绘制误差线（已迁移至 ChartLib.drawErrorBars，此处保留转发以兼容旧调用）
 function drawErrorBars(chart) {
-    const ctx = chart.ctx;
-    const yScale = chart.scales.y;
-
-    chart.data.datasets.forEach((dataset, datasetIndex) => {
-        if (!dataset.errorBars || !dataset.errorBars.some(e => e > 0)) {
-            return;
-        }
-
-        const meta = chart.getDatasetMeta(datasetIndex);
-        const errorData = dataset.errorBars;
-
-        meta.data.forEach((bar, index) => {
-            const value = dataset.data[index];
-            const error = errorData[index];
-
-            if (!error || error === 0) return;
-
-            const x = bar.x;
-            const y = bar.y;
-            const baseWidth = bar.width;
-
-            // 计算误差条的位置
-            const yTop = yScale.getPixelForValue(value + error);
-            const yBottom = yScale.getPixelForValue(value - error);
-            const barTop = y;
-
-            // 绘制误差线
-            ctx.save();
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-
-            // 垂直线
-            ctx.moveTo(x, Math.min(yTop, barTop));
-            ctx.lineTo(x, Math.max(yBottom, barTop));
-            ctx.stroke();
-
-            // 顶部横线
-            const lineWidth = Math.min(15, baseWidth * 0.4);
-            ctx.beginPath();
-            ctx.moveTo(x - lineWidth / 2, Math.min(yTop, barTop));
-            ctx.lineTo(x + lineWidth / 2, Math.min(yTop, barTop));
-            ctx.stroke();
-
-            // 底部横线
-            ctx.beginPath();
-            ctx.moveTo(x - lineWidth / 2, Math.max(yBottom, barTop));
-            ctx.lineTo(x + lineWidth / 2, Math.max(yBottom, barTop));
-            ctx.stroke();
-
-            ctx.restore();
-        });
-    });
+    ChartLib.drawErrorBars(chart);
 }
 
-// 初始化图表
+// 初始化图表（分类：基线对比 + 单模型详情 + 学习曲线）
 function initCharts() {
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
-    const gridColor = isDark ? '#404040' : '#e8e8e8';
+    // —— 基线对比 ——
+    charts.chart1 = ChartLib.createBarChart(document.getElementById('chart1'), { yMax: 1 });
+    charts.chart2 = ChartLib.createBarChart(document.getElementById('chart2'), { yMax: 1 });
+    charts.radar = ChartLib.createRadarChart(document.getElementById('radarChart'));
 
-    // 柱状图1
-    const ctx1 = document.getElementById('chart1').getContext('2d');
-    charts.chart1 = new Chart(ctx1, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '准确率',
-                data: [],
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                errorBars: null
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                },
-                x: {
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: { color: textColor }
-                }
-            }
-        },
-        plugins: [{
-            id: 'errorBars',
-            afterDatasetsDraw: (chart) => drawErrorBars(chart)
-        }]
-    });
+    // —— 学习曲线 ——
+    charts.lcChart1 = ChartLib.createLineChart(document.getElementById('lcChart1'));
+    charts.lcChart2 = ChartLib.createLineChart(document.getElementById('lcChart2'));
 
-    // 柱状图2
-    const ctx2 = document.getElementById('chart2').getContext('2d');
-    charts.chart2 = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'F1',
-                data: [],
-                backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                errorBars: null
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                },
-                x: {
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: { color: textColor }
-                }
-            }
-        },
-        plugins: [{
-            id: 'errorBars',
-            afterDatasetsDraw: (chart) => drawErrorBars(chart)
-        }]
-    });
+    // —— 单模型详情（分类） ——
+    charts.detailMetrics = ChartLib.createBarChart(document.getElementById('detailMetricsChart'), { yMax: 1 });
+    charts.roc = null;       // 切换模型/主题时按需重建
+    charts.pr = null;
+    charts.confusion = null;
 
-    // 雷达图
-    const radarCtx = document.getElementById('radarChart').getContext('2d');
-    charts.radar = new Chart(radarCtx, {
-        type: 'radar',
-        data: {
-            labels: ['准确率', 'AUC', 'Precision', 'Recall', 'F1'],
-            datasets: []
-        },
-        options: {
-            responsive: true,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: {
-                        color: textColor,
-                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
-                    },
-                    grid: { color: gridColor },
-                    pointLabels: { color: textColor }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: textColor }
-                }
-            }
-        }
-    });
+    // 详情图表占位（避免空 canvas）
+    _initDetailPlaceholders(['rocChart', 'prChart', 'confusionChart']);
 }
 
-// 初始化回归图表
+// 初始化回归图表（基线对比 + 单模型详情 + 学习曲线）
 function initRegressionCharts() {
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#e0e0e0' : '#2c2c2c';
-    const gridColor = isDark ? '#404040' : '#e8e8e8';
+    // —— 基线对比 ——
+    charts.regressionChart1 = ChartLib.createBarChart(document.getElementById('regressionChart1'));
+    charts.regressionChart2 = ChartLib.createBarChart(document.getElementById('regressionChart2'));
+    charts.regressionRadar = ChartLib.createRadarChart(document.getElementById('regressionRadarChart'));
 
-    // 柱状图1 (MAE)
-    const ctx1 = document.getElementById('regressionChart1').getContext('2d');
-    charts.regressionChart1 = new Chart(ctx1, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'MAE',
-                data: [],
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                errorBars: null
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
+    // —— 学习曲线 ——
+    charts.regLcChart1 = ChartLib.createLineChart(document.getElementById('regLcChart1'));
+    charts.regLcChart2 = ChartLib.createLineChart(document.getElementById('regLcChart2'));
+
+    // —— 单模型详情（回归） ——
+    charts.regDetailMetrics = ChartLib.createBarChart(document.getElementById('regDetailMetricsChart'));
+    charts.regPredVsTrue = null;
+    charts.regResidual = null;
+
+    _initDetailPlaceholders(['regPredVsTrueChart', 'regResidualChart']);
+}
+
+// 详情图表的空占位（提示用户先运行/选择模型）
+function _initDetailPlaceholders(canvasIds) {
+    const theme = ChartLib.getThemeColors();
+    canvasIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const chart = new Chart(el.getContext('2d'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: theme.palette[0] }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { ticks: { color: theme.text }, grid: { color: theme.grid } },
+                    x: { ticks: { color: theme.text }, grid: { color: theme.grid } },
                 },
-                x: {
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: { color: textColor }
-                }
-            }
-        },
-        plugins: [{
-            id: 'errorBars',
-            afterDatasetsDraw: (chart) => drawErrorBars(chart)
-        }]
-    });
-
-    // 柱状图2 (RMSE)
-    const ctx2 = document.getElementById('regressionChart2').getContext('2d');
-    charts.regressionChart2 = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'RMSE',
-                data: [],
-                backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                errorBars: null
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                },
-                x: {
-                    ticks: { color: textColor },
-                    grid: { color: gridColor }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: { color: textColor }
-                }
-            }
-        },
-        plugins: [{
-            id: 'errorBars',
-            afterDatasetsDraw: (chart) => drawErrorBars(chart)
-        }]
-    });
-
-    // 雷达图
-    const radarCtx = document.getElementById('regressionRadarChart').getContext('2d');
-    charts.regressionRadar = new Chart(radarCtx, {
-        type: 'radar',
-        data: {
-            labels: ['1-MAE', '1-RMSE', 'R²'],
-            datasets: []
-        },
-        options: {
-            responsive: true,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 1,
-                    ticks: {
-                        color: textColor,
-                        backdropColor: isDark ? '#2d2d2d' : '#ffffff'
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: '运行模拟并选择模型后查看',
+                        color: theme.muted,
+                        font: { size: 13 },
                     },
-                    grid: { color: gridColor },
-                    pointLabels: { color: textColor }
-                }
+                },
             },
-            plugins: {
-                legend: {
-                    labels: { color: textColor }
-                }
-            }
-        }
+        });
+        // 临时挂到 charts，便于主题刷新/销毁
+        charts['_' + id] = chart;
     });
 }
 
@@ -1567,6 +1382,19 @@ function displayResults(results, experimentType) {
     const isRegression = currentTaskMode === 'regression';
     updateTable(results, experimentType, isRegression);
     updateCharts(results, experimentType, isRegression);
+
+    // 学习曲线 Tab 显隐
+    updateResultTabsVisibility(experimentType);
+
+    // 填充单模型详情下拉（去重保序）
+    const models = [];
+    results.forEach(r => {
+        if (r.model && !models.includes(r.model)) models.push(r.model);
+    });
+    populateDetailModelSelect(models);
+
+    // 自动预加载第一个模型的详情图（详情 Tab 当前可见则立即渲染，否则切过去时由 shown.bs.tab 渲染）
+    refreshDetail().catch(() => { /* 预加载失败不阻塞主流程 */ });
 }
 
 // 更新表格
@@ -1834,7 +1662,7 @@ function updateBarCharts(results, taskType, isStatistical, colors) {
     }
 }
 
-// 更新学习曲线图表
+// 更新学习曲线图表（分类：画到独立 lcChart1/lcChart2）
 function updateLearningCurveCharts(results, taskType, colors) {
     // 按模型分组
     const modelGroups = {};
@@ -1854,18 +1682,23 @@ function updateLearningCurveCharts(results, taskType, colors) {
     if (taskType === 'regression') {
         metric1 = 'mae_mean';
         metric2 = 'rmse_mean';
-        document.getElementById('chart1Title').textContent = 'MAE 学习曲线';
-        document.getElementById('chart2Title').textContent = 'RMSE 学习曲线';
     } else if (taskType === 'multiclass') {
         metric1 = 'accuracy_mean';
         metric2 = 'macro_f1_mean';
-        document.getElementById('chart1Title').textContent = '准确率学习曲线';
-        document.getElementById('chart2Title').textContent = 'Macro-F1 学习曲线';
     } else {  // binary
         metric1 = 'accuracy_mean';
         metric2 = 'roc_auc_mean';
-        document.getElementById('chart1Title').textContent = '准确率学习曲线';
-        document.getElementById('chart2Title').textContent = 'ROC-AUC 学习曲线';
+    }
+
+    // 学习曲线 Tab 标题
+    const t1 = document.getElementById('lcChart1Title');
+    const t2 = document.getElementById('lcChart2Title');
+    if (taskType === 'multiclass') {
+        if (t1) t1.textContent = '准确率学习曲线';
+        if (t2) t2.textContent = 'Macro-F1 学习曲线';
+    } else {  // binary
+        if (t1) t1.textContent = '准确率学习曲线';
+        if (t2) t2.textContent = 'ROC-AUC 学习曲线';
     }
 
     // 创建数据集
@@ -1893,21 +1726,14 @@ function updateLearningCurveCharts(results, taskType, colors) {
         fill: false,
     }));
 
-    // 更新图表类型为折线图
-    charts.chart1.config.type = 'line';
-    charts.chart1.data.labels = labels;
-    charts.chart1.data.datasets = datasets1;
-    charts.chart1.update();
+    // 更新独立的学习曲线折线图
+    charts.lcChart1.data.labels = labels;
+    charts.lcChart1.data.datasets = datasets1;
+    charts.lcChart1.update();
 
-    charts.chart2.config.type = 'line';
-    charts.chart2.data.labels = labels;
-    charts.chart2.data.datasets = datasets2;
-    charts.chart2.update();
-
-    // 雷达图不适用于学习曲线，隐藏或显示提示
-    charts.radar.data.labels = [];
-    charts.radar.data.datasets = [];
-    charts.radar.update();
+    charts.lcChart2.data.labels = labels;
+    charts.lcChart2.data.datasets = datasets2;
+    charts.lcChart2.update();
 }
 
 // 更新回归柱状图（单次运行和交叉验证）
@@ -1977,8 +1803,11 @@ function updateRegressionLearningCurveCharts(results, colors) {
     const metric1 = 'mae_mean';
     const metric2 = 'rmse_mean';
 
-    document.getElementById('regressionChart1Title').textContent = 'MAE 学习曲线';
-    document.getElementById('regressionChart2Title').textContent = 'RMSE 学习曲线';
+    // 学习曲线 Tab 标题
+    const rt1 = document.getElementById('regLcChart1Title');
+    const rt2 = document.getElementById('regLcChart2Title');
+    if (rt1) rt1.textContent = 'MAE 学习曲线';
+    if (rt2) rt2.textContent = 'RMSE 学习曲线';
 
     // 创建数据集
     const datasets1 = Object.keys(modelGroups).map((model, i) => ({
@@ -2005,21 +1834,14 @@ function updateRegressionLearningCurveCharts(results, colors) {
         fill: false,
     }));
 
-    // 更新图表类型为折线图
-    charts.regressionChart1.config.type = 'line';
-    charts.regressionChart1.data.labels = labels;
-    charts.regressionChart1.data.datasets = datasets1;
-    charts.regressionChart1.update();
+    // 更新独立的学习曲线折线图
+    charts.regLcChart1.data.labels = labels;
+    charts.regLcChart1.data.datasets = datasets1;
+    charts.regLcChart1.update();
 
-    charts.regressionChart2.config.type = 'line';
-    charts.regressionChart2.data.labels = labels;
-    charts.regressionChart2.data.datasets = datasets2;
-    charts.regressionChart2.update();
-
-    // 雷达图不适用于学习曲线
-    charts.regressionRadar.data.labels = [];
-    charts.regressionRadar.data.datasets = [];
-    charts.regressionRadar.update();
+    charts.regLcChart2.data.labels = labels;
+    charts.regLcChart2.data.datasets = datasets2;
+    charts.regLcChart2.update();
 }
 
 // 导出CSV
@@ -2058,6 +1880,320 @@ async function exportCSV() {
     } catch (error) {
         showAlert('导出失败: ' + error.message, 'danger');
     }
+}
+
+// =============================================================================
+// 结果区 Tab 调度 + 单模型详情 + prob 导出
+// =============================================================================
+
+// 缓存最近一次运行的结果（供详情 Tab 的模型下拉填充）
+let lastSelectedModelList = [];
+
+// 学习曲线 Tab 显隐
+function updateResultTabsVisibility(experimentType) {
+    const isRegression = currentTaskMode === 'regression';
+    const wrapper = document.getElementById(isRegression ? 'regLcTabWrapper' : 'lcTabWrapper');
+    if (wrapper) {
+        wrapper.style.display = (experimentType === 'learning_curve') ? '' : 'none';
+    }
+}
+
+// 填充单模型详情的下拉
+function populateDetailModelSelect(models) {
+    lastSelectedModelList = models.slice();
+    const selectId = currentTaskMode === 'regression' ? 'regDetailModelSelect' : 'detailModelSelect';
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m.toUpperCase();
+        sel.appendChild(opt);
+    });
+    // 优先保留之前的选择，否则默认选第一个
+    if (prev && models.includes(prev)) {
+        sel.value = prev;
+    } else if (models.length > 0) {
+        sel.value = models[0];
+    }
+}
+
+// 初始用预定义模型填充下拉（未运行时也能选择）
+function populateDetailModelSelectDefault() {
+    const allModels = Object.keys(DEFAULT_PROFILES).concat(customModels);
+    populateDetailModelSelect(allModels);
+}
+
+// 加载单个模型的详情（调用 /api/model_detail），返回 data
+async function loadModelDetail(model) {
+    const selectedModels = getSelectedModels();
+    const models = selectedModels.length > 0 ? selectedModels : (lastSelectedModelList.length > 0 ? lastSelectedModelList : [model]);
+    const requestData = buildRequestData(models);
+    requestData.target_model = model;
+    // CV 模式下附带多折统计供 error-bar
+    requestData.with_cv_stats = (requestData.experiment_config && requestData.experiment_config.type === 'cv');
+
+    const response = await fetch('/api/model_detail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+    });
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || '加载模型详情失败');
+    }
+    return data;
+}
+
+// 渲染单模型详情（分类/回归统一入口）
+function renderDetailCharts(data, isRegression) {
+    lastDetailData = data;
+
+    if (isRegression) {
+        renderRegressionDetail(data);
+    } else {
+        renderClassificationDetail(data);
+    }
+}
+
+// 分类详情：多指标柱状图 + ROC + PR + 混淆矩阵
+function renderClassificationDetail(data) {
+    const model = data.model.toUpperCase();
+    const nClasses = data.n_classes || 2;
+    const isBinary = (nClasses === 2);
+
+    // 指标提示
+    const hint = document.getElementById('detailMetricsHint');
+    if (hint) {
+        const acc = data.metrics.accuracy;
+        const auc = data.metrics.roc_auc;
+        hint.textContent = `准确率=${(acc != null ? acc.toFixed(3) : 'N/A')}  AUC=${(auc != null ? auc.toFixed(3) : 'N/A')}`;
+    }
+
+    // —— 多指标柱状图（带 error-bar） ——
+    const metricDefs = isBinary
+        ? [
+            { key: 'accuracy', label: '准确率' },
+            { key: 'precision', label: 'Precision' },
+            { key: 'recall', label: 'Recall' },
+            { key: 'f1', label: 'F1' },
+            { key: 'roc_auc', label: 'ROC-AUC' },
+            { key: 'pr_auc', label: 'PR-AUC' },
+        ]
+        : [
+            { key: 'accuracy', label: '准确率' },
+            { key: 'macro_f1', label: 'Macro-F1' },
+            { key: 'weighted_f1', label: 'Weighted-F1' },
+            { key: 'top_3_accuracy', label: 'Top-3' },
+        ];
+
+    const theme = ChartLib.getThemeColors();
+    const stats = data.metrics_stats || {};
+    const labels = metricDefs.map(d => d.label);
+    const values = metricDefs.map(d => {
+        const v = data.metrics[d.key];
+        return (v == null || isNaN(v)) ? 0 : v;
+    });
+    const errors = metricDefs.map(d => {
+        if (stats[d.key]) return stats[d.key].std || 0;
+        return 0;
+    });
+
+    charts.detailMetrics.data.labels = labels;
+    charts.detailMetrics.data.datasets = [{
+        label: model,
+        data: values,
+        backgroundColor: theme.palette[0],
+        errorBars: errors,
+    }];
+    charts.detailMetrics.update();
+
+    // —— ROC / PR（仅二分类有意义） ——
+    if (isBinary) {
+        const yTrue = data.y_true;
+        const yScore = data.y_prob.map(p => p[1]);
+        const roc = ChartLib.computeROC(yTrue, yScore);
+        const pr = ChartLib.computePR(yTrue, yScore);
+
+        // CV 模式：用后端多折插值 ROC 画 mean ± std 置信区间
+        const rocInput = { fpr: roc.fpr, tpr: roc.tpr, auc: roc.auc, label: model };
+        if (data.roc_cv) {
+            const rc = data.roc_cv;
+            const aucStd = (data.metrics_stats && data.metrics_stats.roc_auc)
+                ? data.metrics_stats.roc_auc.std : null;
+            rocInput.fpr = rc.fpr;
+            rocInput.tpr = rc.tpr_mean;
+            rocInput.aucStd = aucStd;
+            rocInput.ciLower = rc.fpr.map((f, i) => Math.max(0, rc.tpr_mean[i] - rc.tpr_std[i]));
+            rocInput.ciUpper = rc.fpr.map((f, i) => Math.min(1, rc.tpr_mean[i] + rc.tpr_std[i]));
+            // CV 用各折 mean AUC 作为标注
+            if (data.metrics_stats && data.metrics_stats.roc_auc) {
+                rocInput.auc = data.metrics_stats.roc_auc.mean;
+            }
+        }
+
+        ChartLib.destroy(charts.roc);
+        ChartLib.destroy(charts['_rocChart']);
+        charts['_rocChart'] = null;
+        charts.roc = ChartLib.createROCChart(document.getElementById('rocChart'), rocInput);
+
+        ChartLib.destroy(charts.pr);
+        ChartLib.destroy(charts['_prChart']);
+        charts['_prChart'] = null;
+        charts.pr = ChartLib.createPRChart(document.getElementById('prChart'),
+            { recall: pr.recall, precision: pr.precision, ap: pr.ap, label: model });
+    } else {
+        // 多分类：ROC/PR 画 OvR 的 macro，或提示
+        const yTrue = data.y_true;
+        const yProb = data.y_prob;
+        // 取各类最大概率做近似（整体）—— 这里给个友好提示占位
+        ChartLib.destroy(charts.roc);
+        ChartLib.destroy(charts['_rocChart']);
+        charts.roc = ChartLib.createROCChart(document.getElementById('rocChart'),
+            { fpr: [0, 1], tpr: [0, 1], auc: NaN, label: `${model} (多分类，建议看混淆矩阵)` });
+        ChartLib.destroy(charts.pr);
+        ChartLib.destroy(charts['_prChart']);
+        charts.pr = ChartLib.createPRChart(document.getElementById('prChart'),
+            { recall: [0, 1], precision: [1, 0], ap: NaN, label: `${model} (多分类，建议看混淆矩阵)` });
+    }
+
+    // —— 混淆矩阵 ——
+    const cm = ChartLib.computeConfusionMatrix(data.y_true, data.y_pred, nClasses);
+    const cmLabels = cm.map((_, i) => String(i));
+    ChartLib.destroy(charts.confusion);
+    ChartLib.destroy(charts['_confusionChart']);
+    charts.confusion = ChartLib.createConfusionMatrix(document.getElementById('confusionChart'),
+        { matrix: cm, labels: cmLabels });
+}
+
+// 回归详情：多指标柱状图 + 预测vs真实 + 残差
+function renderRegressionDetail(data) {
+    const model = data.model.toUpperCase();
+
+    const hint = document.getElementById('regDetailMetricsHint');
+    if (hint) {
+        hint.textContent = `R²=${data.metrics.r2.toFixed(3)}  RMSE=${data.metrics.rmse.toFixed(3)}  MAE=${data.metrics.mae.toFixed(3)}`;
+    }
+
+    const theme = ChartLib.getThemeColors();
+    const stats = data.metrics_stats || {};
+    const metricDefs = [
+        { key: 'r2', label: 'R²' },
+        { key: 'mae', label: 'MAE' },
+        { key: 'rmse', label: 'RMSE' },
+    ];
+    const labels = metricDefs.map(d => d.label);
+    const values = metricDefs.map(d => {
+        const v = data.metrics[d.key];
+        return (v == null || isNaN(v)) ? 0 : v;
+    });
+    const errors = metricDefs.map(d => stats[d.key] ? (stats[d.key].std || 0) : 0);
+
+    charts.regDetailMetrics.data.labels = labels;
+    charts.regDetailMetrics.data.datasets = [{
+        label: model,
+        data: values,
+        backgroundColor: theme.palette[0],
+        errorBars: errors,
+    }];
+    charts.regDetailMetrics.update();
+
+    // 预测 vs 真实
+    const yTrue = data.y_true, yPred = data.y_pred;
+    const pvPoints = yTrue.map((t, i) => ({ x: t, y: yPred[i] }));
+    ChartLib.destroy(charts.regPredVsTrue);
+    ChartLib.destroy(charts['_regPredVsTrueChart']);
+    charts.regPredVsTrue = ChartLib.createScatterChart(document.getElementById('regPredVsTrueChart'), {
+        points: pvPoints, xLabel: '真实值 (y_true)', yLabel: '预测值 (y_pred)', refLine: true, label: model,
+    });
+
+    // 残差图（残差 vs 预测值）
+    const resPoints = yPred.map((p, i) => ({ x: p, y: yTrue[i] - p }));
+    ChartLib.destroy(charts.regResidual);
+    ChartLib.destroy(charts['_regResidualChart']);
+    charts.regResidual = ChartLib.createScatterChart(document.getElementById('regResidualChart'), {
+        points: resPoints, xLabel: '预测值 (y_pred)', yLabel: '残差 (y_true - y_pred)', refLine: false, label: model,
+    });
+}
+
+// 触发详情加载并渲染
+async function refreshDetail() {
+    const selectId = currentTaskMode === 'regression' ? 'regDetailModelSelect' : 'detailModelSelect';
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) {
+        showAlert('请先运行模拟', 'warning');
+        return;
+    }
+    const isRegression = currentTaskMode === 'regression';
+    try {
+        const data = await loadModelDetail(sel.value);
+        renderDetailCharts(data, isRegression);
+    } catch (e) {
+        showAlert('加载详情失败: ' + e.message, 'danger');
+    }
+}
+
+// 导出选中模型的 prob / 预测值
+async function exportModelProb() {
+    const selectId = currentTaskMode === 'regression' ? 'regDetailModelSelect' : 'detailModelSelect';
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) {
+        showAlert('请先选择模型', 'warning');
+        return;
+    }
+    const isRegression = currentTaskMode === 'regression';
+    try {
+        const data = await loadModelDetail(sel.value);
+        let csv;
+        if (isRegression) {
+            const header = 'y_true,y_pred,residual';
+            const rows = data.y_true.map((t, i) => {
+                const p = data.y_pred[i];
+                return [t, p, t - p].join(',');
+            });
+            csv = [header, ...rows].join('\n');
+        } else {
+            const nClasses = data.n_classes || 2;
+            const probCols = Array.from({ length: nClasses }, (_, c) => `prob_class_${c}`).join(',');
+            const header = `y_true,y_pred,${probCols}`;
+            const rows = data.y_true.map((t, i) => {
+                const probs = data.y_prob[i].join(',');
+                return [t, data.y_pred[i], probs].join(',');
+            });
+            csv = [header, ...rows].join('\n');
+        }
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `model_${data.model}_${isRegression ? 'predictions' : 'prob'}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showAlert(`已导出 ${data.model.toUpperCase()} 的 ${isRegression ? '预测值' : 'prob'}（${data.y_true.length} 条）`, 'success');
+    } catch (e) {
+        showAlert('导出失败: ' + e.message, 'danger');
+    }
+}
+
+// 样本量输入校验（最少 10）
+function clampNumSamples(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const badgeId = inputId + 'Value';
+    const badge = document.getElementById(badgeId);
+    const sync = () => {
+        let v = parseInt(el.value, 10);
+        if (isNaN(v) || v < 10) {
+            v = 10;
+            el.value = 10;
+            showAlert('样本量最少 10 条，已自动调整为 10', 'warning');
+        }
+        if (badge) badge.textContent = v;
+    };
+    el.addEventListener('input', () => { if (badge) badge.textContent = el.value || ''; });
+    el.addEventListener('change', sync);
 }
 
 // 显示提示（新的Toast通知系统）

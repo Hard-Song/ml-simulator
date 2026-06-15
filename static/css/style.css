@@ -769,3 +769,90 @@ body.dark-mode #themeToggle:hover {
     font-size: 1.2rem;
     line-height: 1;
 }
+
+/* =============================================================================
+ * 模型能力配置参数（从 index.html 内联样式迁移，统一深浅色）
+ * ========================================================================== */
+
+.param-slider label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.2rem;
+    display: flex;
+    justify-content: space-between;
+    color: #2c2c2c;
+}
+
+.param-value {
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.collapse-button {
+    color: #6b7280;
+}
+
+/* 深色模式覆盖 */
+body.dark-mode .param-slider label {
+    color: #e0e0e0;
+}
+
+body.dark-mode .param-value {
+    color: #a0a0a0;
+}
+
+body.dark-mode .collapse-button {
+    color: #a0a0a0;
+}
+
+/* 模型卡片头部内文字（标签/徽章描述）深色适配 */
+body.dark-mode .model-card-header {
+    color: #e0e0e0;
+}
+
+body.dark-mode .model-card-body {
+    color: #e0e0e0;
+}
+
+/* =============================================================================
+ * 结果区 Tab / 下拉 / 图表容器
+ * ========================================================================== */
+
+/* 图表容器：给 canvas 一个稳定高度，避免 0 高度 */
+.chart-box {
+    position: relative;
+    min-height: 300px;
+}
+
+.chart-box canvas {
+    max-height: 340px;
+}
+
+/* 详情下拉（form-select）深色已由通用规则覆盖，此处补充小尺寸下拉的聚焦色 */
+body.dark-mode .form-select-sm {
+    background-color: #333333;
+    border-color: #505050;
+    color: #e0e0e0;
+}
+
+/* 结果区 Tab 面板背景透明，继承卡片 */
+#baseline-panel,
+#detail-panel,
+#lc-panel,
+#regBaseline-panel,
+#regDetail-panel,
+#regLc-panel {
+    background-color: transparent;
+}
+
+/* 详情区提示文字 */
+#detailMetricsHint,
+#regDetailMetricsHint {
+    color: #6b7280;
+}
+
+body.dark-mode #detailMetricsHint,
+body.dark-mode #regDetailMetricsHint {
+    color: #a0a0a0;
+}
+

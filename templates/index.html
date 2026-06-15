@@ -10,6 +10,8 @@
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Chart.js Matrix 插件（混淆矩阵） -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -77,24 +79,11 @@
             margin-bottom: 0.8rem;
         }
 
-        .param-slider label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 0.2rem;
-            display: flex;
-            justify-content: space-between;
-            color: #2c2c2c;
-        }
-
-        .param-value {
-            color: #6b7280;
-            font-weight: 600;
-        }
+        /* 颜色统一交由 style.css 管理（含深色模式覆盖），此处不硬编码 */
 
         .collapse-button {
             cursor: pointer;
             user-select: none;
-            color: #6b7280;
         }
 
         .section-title {
@@ -183,11 +172,9 @@
                                             </select>
                                         </div>
                                         <div class="col-md-6 mb-2">
-                                            <label class="form-label fw-bold">样本量</label>
-                                            <input type="range" class="form-range" id="numSamples" min="1000" max="10000" step="1000" value="1000">
-                                            <div class="text-center">
-                                                <span class="badge bg-primary" id="numSamplesValue">1000</span>
-                                            </div>
+                                            <label class="form-label fw-bold">样本量 <span class="badge bg-primary" id="numSamplesValue">1000</span></label>
+                                            <input type="number" class="form-control" id="numSamples" min="10" step="1" value="1000">
+                                            <small class="form-text text-muted">最少 10 条，可输入任意整数</small>
                                         </div>
                                     </div>
 
@@ -463,67 +450,114 @@
             </div>
         </div>
 
-        <!-- 第三行：对比结果 -->
+        <!-- 第三行：结果展示（Tab 卡片） -->
         <div class="row">
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">📈 对比结果</h5>
+                        <h5 class="mb-0">📈 结果展示</h5>
                     </div>
                     <div class="card-body">
-                        <!-- 结果表格 -->
-                        <div class="mb-4">
-                            <div class="table-responsive">
-                                <table class="table table-hover table-bordered" id="resultsTable">
-                                    <thead class="table-dark" id="resultsTableHead">
-                                        <tr>
-                                            <th>模型</th>
-                                            <th>准确率</th>
-                                            <th>AUC</th>
-                                            <th>F1</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td colspan="4" class="text-center text-muted py-4">
-                                                <i class="bi bi-arrow-up"></i><br>
-                                                点击"运行模拟"查看结果
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <!-- 结果 Tab -->
+                        <ul class="nav nav-tabs mb-3" id="resultTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="baseline-tab" data-bs-toggle="tab" data-bs-target="#baseline-panel" type="button" role="tab">📊 基线对比</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="detail-tab" data-bs-toggle="tab" data-bs-target="#detail-panel" type="button" role="tab">🔍 单模型详情</button>
+                            </li>
+                            <li class="nav-item" role="presentation" id="lcTabWrapper" style="display:none;">
+                                <button class="nav-link" id="lc-tab" data-bs-toggle="tab" data-bs-target="#lc-panel" type="button" role="tab">📉 学习曲线</button>
+                            </li>
+                        </ul>
 
-                        <!-- 图表区域 -->
-                        <div class="row">
-                            <div class="col-md-6 mb-4">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" id="chart1Title">准确率对比</h6>
+                        <div class="tab-content">
+                            <!-- 基线对比 -->
+                            <div class="tab-pane fade show active" id="baseline-panel" role="tabpanel">
+                                <div class="mb-4">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover table-bordered" id="resultsTable">
+                                            <thead class="table-dark" id="resultsTableHead">
+                                                <tr><th>模型</th><th>准确率</th><th>AUC</th><th>F1</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr><td colspan="4" class="text-center text-muted py-4">点击"运行模拟"查看结果</td></tr>
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <div class="card-body">
-                                        <canvas id="chart1"></canvas>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0" id="chart1Title">准确率对比</h6></div>
+                                            <div class="card-body chart-box"><canvas id="chart1"></canvas></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0" id="chart2Title">F1对比</h6></div>
+                                            <div class="card-body chart-box"><canvas id="chart2"></canvas></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0">综合性能雷达图</h6></div>
+                                            <div class="card-body chart-box"><canvas id="radarChart"></canvas></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-4">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" id="chart2Title">F1对比</h6>
+
+                            <!-- 单模型详情 -->
+                            <div class="tab-pane fade" id="detail-panel" role="tabpanel">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <label class="form-label fw-bold mb-0">选择模型</label>
+                                    <select class="form-select form-select-sm" id="detailModelSelect" style="width:auto;min-width:180px;"></select>
+                                    <button class="btn btn-sm btn-outline-primary" id="exportProbBtn">📥 导出该模型 prob</button>
+                                    <span class="text-muted" id="detailMetricsHint" style="font-size:0.85rem;"></span>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0">多项指标（带误差棒）</h6></div>
+                                            <div class="card-body chart-box" style="height:340px;"><canvas id="detailMetricsChart"></canvas></div>
+                                        </div>
                                     </div>
-                                    <div class="card-body">
-                                        <canvas id="chart2"></canvas>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0">ROC 曲线</h6></div>
+                                            <div class="card-body chart-box" style="height:340px;"><canvas id="rocChart"></canvas></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0">PR 曲线</h6></div>
+                                            <div class="card-body chart-box" style="height:340px;"><canvas id="prChart"></canvas></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0">混淆矩阵</h6></div>
+                                            <div class="card-body chart-box" style="height:360px;"><canvas id="confusionChart"></canvas></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">综合性能雷达图</h6>
+
+                            <!-- 学习曲线 -->
+                            <div class="tab-pane fade" id="lc-panel" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0" id="lcChart1Title">学习曲线 1</h6></div>
+                                            <div class="card-body chart-box" style="height:340px;"><canvas id="lcChart1"></canvas></div>
+                                        </div>
                                     </div>
-                                    <div class="card-body">
-                                        <canvas id="radarChart"></canvas>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header"><h6 class="mb-0" id="lcChart2Title">学习曲线 2</h6></div>
+                                            <div class="card-body chart-box" style="height:340px;"><canvas id="lcChart2"></canvas></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -554,11 +588,9 @@
                                     <h6 class="mb-2 text-primary">基本配置</h6>
                                     <div class="row mb-3">
                                         <div class="col-md-6 mb-2">
-                                            <label class="form-label fw-bold">样本量</label>
-                                            <input type="range" class="form-range" id="regressionNumSamples" min="1000" max="20000" step="1000" value="5000">
-                                            <div class="text-center">
-                                                <span class="badge bg-primary" id="regressionNumSamplesValue">5000</span>
-                                            </div>
+                                            <label class="form-label fw-bold">样本量 <span class="badge bg-primary" id="regressionNumSamplesValue">5000</span></label>
+                                            <input type="number" class="form-control" id="regressionNumSamples" min="10" step="1" value="5000">
+                                            <small class="form-text text-muted">最少 10 条，可输入任意整数</small>
                                         </div>
                                     </div>
 
@@ -846,67 +878,108 @@
                         </div>
                     </div>
 
-                    <!-- 第三行：对比结果 -->
+                    <!-- 第三行：结果展示（Tab 卡片） -->
                     <div class="row">
                         <div class="col-12">
                             <div class="card">
                                 <div class="card-header">
-                                    <h5 class="mb-0">📈 对比结果</h5>
+                                    <h5 class="mb-0">📈 结果展示</h5>
                                 </div>
                                 <div class="card-body">
-                                    <!-- 结果表格 -->
-                                    <div class="mb-4">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover table-bordered" id="regressionResultsTable">
-                                                <thead class="table-dark" id="regressionResultsTableHead">
-                                                    <tr>
-                                                        <th>模型</th>
-                                                        <th>R²</th>
-                                                        <th>RMSE</th>
-                                                        <th>MAE</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr>
-                                                        <td colspan="4" class="text-center text-muted py-4">
-                                                            <i class="bi bi-arrow-up"></i><br>
-                                                            点击"运行模拟"查看结果
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
+                                    <!-- 结果 Tab -->
+                                    <ul class="nav nav-tabs mb-3" id="regressionResultTabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="regBaseline-tab" data-bs-toggle="tab" data-bs-target="#regBaseline-panel" type="button" role="tab">📊 基线对比</button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="regDetail-tab" data-bs-toggle="tab" data-bs-target="#regDetail-panel" type="button" role="tab">🔍 单模型详情</button>
+                                        </li>
+                                        <li class="nav-item" role="presentation" id="regLcTabWrapper" style="display:none;">
+                                            <button class="nav-link" id="regLc-tab" data-bs-toggle="tab" data-bs-target="#regLc-panel" type="button" role="tab">📉 学习曲线</button>
+                                        </li>
+                                    </ul>
 
-                                    <!-- 图表区域 -->
-                                    <div class="row">
-                                        <div class="col-md-6 mb-4">
-                                            <div class="card">
-                                                <div class="card-header">
-                                                    <h6 class="mb-0" id="regressionChart1Title">R²对比</h6>
+                                    <div class="tab-content">
+                                        <!-- 基线对比 -->
+                                        <div class="tab-pane fade show active" id="regBaseline-panel" role="tabpanel">
+                                            <div class="mb-4">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover table-bordered" id="regressionResultsTable">
+                                                        <thead class="table-dark" id="regressionResultsTableHead">
+                                                            <tr><th>模型</th><th>R²</th><th>RMSE</th><th>MAE</th></tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr><td colspan="4" class="text-center text-muted py-4">点击"运行模拟"查看结果</td></tr>
+                                                        </tbody>
+                                                    </table>
                                                 </div>
-                                                <div class="card-body">
-                                                    <canvas id="regressionChart1"></canvas>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0" id="regressionChart1Title">R²对比</h6></div>
+                                                        <div class="card-body chart-box"><canvas id="regressionChart1"></canvas></div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0" id="regressionChart2Title">RMSE对比</h6></div>
+                                                        <div class="card-body chart-box"><canvas id="regressionChart2"></canvas></div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0">综合性能雷达图</h6></div>
+                                                        <div class="card-body chart-box"><canvas id="regressionRadarChart"></canvas></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-6 mb-4">
-                                            <div class="card">
-                                                <div class="card-header">
-                                                    <h6 class="mb-0" id="regressionChart2Title">RMSE对比</h6>
+
+                                        <!-- 单模型详情（回归：散点+残差） -->
+                                        <div class="tab-pane fade" id="regDetail-panel" role="tabpanel">
+                                            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                                <label class="form-label fw-bold mb-0">选择模型</label>
+                                                <select class="form-select form-select-sm" id="regDetailModelSelect" style="width:auto;min-width:180px;"></select>
+                                                <button class="btn btn-sm btn-outline-primary" id="regExportProbBtn">📥 导出该模型预测值</button>
+                                                <span class="text-muted" id="regDetailMetricsHint" style="font-size:0.85rem;"></span>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-12 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0">多项指标（带误差棒）</h6></div>
+                                                        <div class="card-body chart-box" style="height:340px;"><canvas id="regDetailMetricsChart"></canvas></div>
+                                                    </div>
                                                 </div>
-                                                <div class="card-body">
-                                                    <canvas id="regressionChart2"></canvas>
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0">预测 vs 真实</h6></div>
+                                                        <div class="card-body chart-box" style="height:340px;"><canvas id="regPredVsTrueChart"></canvas></div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0">残差图</h6></div>
+                                                        <div class="card-body chart-box" style="height:340px;"><canvas id="regResidualChart"></canvas></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-12">
-                                            <div class="card">
-                                                <div class="card-header">
-                                                    <h6 class="mb-0">综合性能雷达图</h6>
+
+                                        <!-- 学习曲线 -->
+                                        <div class="tab-pane fade" id="regLc-panel" role="tabpanel">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0" id="regLcChart1Title">MAE 学习曲线</h6></div>
+                                                        <div class="card-body chart-box" style="height:340px;"><canvas id="regLcChart1"></canvas></div>
+                                                    </div>
                                                 </div>
-                                                <div class="card-body">
-                                                    <canvas id="regressionRadarChart"></canvas>
+                                                <div class="col-md-6 mb-4">
+                                                    <div class="card">
+                                                        <div class="card-header"><h6 class="mb-0" id="regLcChart2Title">RMSE 学习曲线</h6></div>
+                                                        <div class="card-body chart-box" style="height:340px;"><canvas id="regLcChart2"></canvas></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1019,6 +1092,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
